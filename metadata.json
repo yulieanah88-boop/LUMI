@@ -1,0 +1,6 @@
+{
+  "name": "MPI Lumi IPAS Kelas 3 SD - Dahulu, Kini, dan Nanti",
+  "description": "Multimedia Pembelajaran Interaktif (MPI) IPAS SD Kelas 3 materi Dahulu, Kini, dan Nanti dengan desain menu love Lumi, mesin waktu interaktif, kuis variatif, asesmen HOTS, dan e-sertifikat.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
