@@ -9,9 +9,17 @@ import {
   Clock,
   Sparkles,
   Play,
+  Pause,
   RotateCcw,
   Volume2,
   VolumeX,
+  Settings,
+  Video,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  Link as LinkIcon,
+  Shield,
 } from 'lucide-react';
 import {
   TUJUAN_PEMBELAJARAN,
@@ -25,7 +33,56 @@ import { speech } from '../utils/speech';
 import { SpeechButton } from './SpeechButton';
 import { AdultGuideModal } from './AdultGuideModal';
 import { SafetyHelpModal } from './SafetyHelpModal';
-import { Shield } from 'lucide-react';
+import { VideoCustomizerModal } from './VideoCustomizerModal';
+
+function parseVideoEmbed(url: string) {
+  if (!url) return null;
+  const trimmed = url.trim();
+
+  // YouTube
+  const ytMatch = trimmed.match(
+    /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i
+  );
+  if (ytMatch && ytMatch[1]) {
+    return {
+      type: 'youtube' as const,
+      embedUrl: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0`,
+      originalUrl: trimmed,
+    };
+  }
+
+  // Direct MP4 / WebM
+  if (/\.(mp4|webm|ogg)($|\?)/i.test(trimmed)) {
+    return {
+      type: 'mp4' as const,
+      embedUrl: trimmed,
+      originalUrl: trimmed,
+    };
+  }
+
+  // Google Drive
+  if (trimmed.includes('drive.google.com/file/d/')) {
+    const fileIdMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (fileIdMatch && fileIdMatch[1]) {
+      return {
+        type: 'drive' as const,
+        embedUrl: `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`,
+        originalUrl: trimmed,
+      };
+    }
+  }
+
+  // Generic https
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return {
+      type: 'generic' as const,
+      embedUrl: trimmed,
+      originalUrl: trimmed,
+    };
+  }
+
+  return null;
+}
 
 interface BelajarMenuProps {
   onBack: () => void;
@@ -54,9 +111,111 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
   const [videoScene, setVideoScene] = useState(0);
   const [currentSpeakingId, setCurrentSpeakingId] = useState<string | null>(null);
 
-  // Modals for sensitivity note
+  // Modals for sensitivity note & video customize
   const [isAdultGuideOpen, setIsAdultGuideOpen] = useState(false);
   const [isSafetyHelpOpen, setIsSafetyHelpOpen] = useState(false);
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+
+  // Recommended URL based on active theme
+  const recommendedVideo =
+    theme?.id === 'tubuhku_berharga'
+      ? {
+          url: 'https://www.youtube.com/watch?v=kYv9Nkj2XqE',
+          title: 'Video Edukasi Anak: Sentuhan Boleh & Sentuhan Tidak Boleh (KemenPPPA)',
+        }
+      : theme?.id === 'dahulu_kini_nanti'
+      ? {
+          url: 'https://www.youtube.com/watch?v=yYh2sA5h1qM',
+          title: 'Video Edukasi IPAS: Perkembangan Teknologi Dahulu vs Sekarang',
+        }
+      : {
+          url: 'https://www.youtube.com/watch?v=kYv9Nkj2XqE',
+          title: 'Video Pembelajaran Kurikulum Merdeka',
+        };
+
+  // Custom video URL state (persisted per theme in localStorage)
+  const themeVideoKey = `mpi_lumi_custom_video_${theme?.id || 'default'}`;
+  const [customVideoUrl, setCustomVideoUrl] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(`mpi_lumi_custom_video_${theme?.id || 'default'}`);
+      if (saved !== null) return saved;
+      return theme?.belajar?.videoSummary?.videoUrl || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [videoMode, setVideoMode] = useState<'video' | 'animation'>(() => {
+    try {
+      const saved = localStorage.getItem(`mpi_lumi_custom_video_${theme?.id || 'default'}`);
+      if (saved) return 'video';
+      if (theme?.belajar?.videoSummary?.videoUrl) return 'video';
+    } catch {}
+    return 'animation';
+  });
+
+  // Auto-play state for animation theater
+  const [isAutoPlayingAnimation, setIsAutoPlayingAnimation] = useState(false);
+  const [autoPlayCountdown, setAutoPlayCountdown] = useState(9);
+
+  // Handle saving video URL
+  const handleSaveVideoUrl = (url: string) => {
+    setCustomVideoUrl(url);
+    try {
+      localStorage.setItem(themeVideoKey, url);
+    } catch {}
+    if (url) {
+      setVideoMode('video');
+    } else {
+      setVideoMode('animation');
+    }
+  };
+
+  // Reset auto-play when switching away from video tab or animation mode
+  useEffect(() => {
+    if (activeTab !== 'video' || videoMode !== 'animation') {
+      setIsAutoPlayingAnimation(false);
+      setAutoPlayCountdown(9);
+    }
+  }, [activeTab, videoMode]);
+
+  // Auto-play countdown effect: automatically advances scenes and speaks narration!
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (activeTab === 'video' && videoMode === 'animation' && isAutoPlayingAnimation) {
+      interval = setInterval(() => {
+        setAutoPlayCountdown((prev) => {
+          if (prev <= 1) {
+            setVideoScene((curScene) => {
+              const totalStages = (videoSummary?.stages?.length || 3) + 1;
+              const nextScene = (curScene + 1) % totalStages;
+
+              const nextNarration = videoSummary
+                ? nextScene === 0
+                  ? `Selamat Datang di ${videoSummary.title}!`
+                  : `${videoSummary.stages[nextScene - 1]?.stageName || `Tahap ${nextScene}`}: ${videoSummary.stages[nextScene - 1]?.years || ''}. ${videoSummary.stages[nextScene - 1]?.desc || ''}`
+                : nextScene === 0
+                ? 'Selamat Datang di Teater Mesin Waktu IPAS!'
+                : nextScene === 1
+                ? 'Babak 1: Zaman Dahulu. Kakek dan Nenek. Diterangi lampu minyak tanah teplok dan bepergian naik delman kuda.'
+                : nextScene === 2
+                ? 'Babak 2: Masa Kini. Lampu LED hemat listrik, panggilan video ponsel, dan Kereta Cepat Whoosh!'
+                : 'Babak 3: Masa Nanti. Mobil terbang bertenaga surya dan robot pelayan ramah!';
+
+              speech.speak(nextNarration);
+              return nextScene;
+            });
+            return 9;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activeTab, videoMode, isAutoPlayingAnimation, videoSummary]);
 
   // Subscribe to speech status
   useEffect(() => {
@@ -619,158 +778,381 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
           </div>
         )}
 
-        {/* TAB 4: VIDEO PEMBELAJARAN INTERAKTIF */}
-        {activeTab === 'video' && (
-          <div className="space-y-4 animate-in fade-in">
-            <div className="bg-white rounded-3xl p-6 border border-rose-100 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-                <div>
-                  <span className="text-xs font-bold text-rose-600 uppercase tracking-wider">
-                    {videoSummary ? 'Teater Edukasi Interaktif' : 'Teater Animasi Tiga Babak Waktu'}
-                  </span>
-                  <h3 className="text-xl font-bold text-slate-800 font-display">
-                    {videoSummary?.title || 'Petualangan Menjelajahi Masa: Dahulu, Kini, & Nanti'}
-                  </h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <SpeechButton
-                    id={`video-scene-speech-${videoScene}`}
-                    textToSpeak={
-                      videoSummary
-                        ? videoScene === 0
-                          ? `Selamat Datang di ${videoSummary.title}! Klik tombol Mulai Cerita di bawah untuk menyaksikan tahapan pemahaman materi ${theme?.judulTema || ''}.`
-                          : `${videoSummary.stages[videoScene - 1]?.stageName || `Tahap ${videoScene}`}: ${videoSummary.stages[videoScene - 1]?.years || ''}. ${videoSummary.stages[videoScene - 1]?.desc || ''}`
-                        : videoScene === 0
-                        ? 'Selamat Datang di Teater Mesin Waktu IPAS! Klik tombol Mulai Cerita di bawah untuk menyaksikan bagaimana kakek-nenek hidup zaman dahulu, bagaimana kita hidup masa kini, dan impian masa depan nanti!'
-                        : videoScene === 1
-                        ? 'Babak 1: Zaman Dahulu. Kakek dan Nenek. Malam hari diterangi lampu minyak tanah teplok berjelaga. Bepergian naik delman kuda atau sepeda onthel. Mengirim kabar menggunakan surat pos yang butuh berminggu-minggu.'
-                        : videoScene === 2
-                        ? 'Babak 2: Masa Kini. Zaman Kita Sekarang. Rumah terang dengan lampu LED hemat listrik. Komunikasi tatap muka dengan video call ponsel dalam 1 detik. Bepergian naik mobil listrik dan Kereta Cepat Whoosh!'
-                        : 'Babak 3: Masa Nanti. Impian Masa Depan. Mobil terbang bertenaga surya bebas polusi, robot pelayan yang ramah, komunikasi hologram tiga dimensi, dan kota hijau yang asri bebas sampah plastik!'
-                    }
-                    label="Dengarkan Narasi Suara"
-                    size="sm"
-                    variant="primary"
-                  />
-                  <span className="text-xs bg-rose-50 text-rose-700 px-3 py-1 rounded-full font-bold">
-                    {theme?.mataPelajaran || 'IPAS'} {theme?.fase || 'Fase B'}
-                  </span>
-                </div>
-              </div>
+        {/* TAB 4: VIDEO PEMBELAJARAN INTERAKTIF & TEATER ANIMASI */}
+        {activeTab === 'video' && (() => {
+          const parsedVideo = parseVideoEmbed(customVideoUrl);
 
-              {/* Simulated Story Stage */}
-              <div className="relative rounded-2xl overflow-hidden bg-slate-950 aspect-video max-w-3xl mx-auto flex flex-col justify-between p-4 shadow-xl border border-slate-800">
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-                  {videoScene === 0 && (
-                    <div className="space-y-3 animate-pulse-subtle">
-                      <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 mx-auto flex items-center justify-center border border-rose-500/50">
-                        <Play className="w-8 h-8 fill-rose-400 ml-1" />
-                      </div>
-                      <h4 className="text-lg font-bold text-white font-display">
-                        {videoSummary?.title || 'Selamat Datang di Teater Mesin Waktu IPAS!'}
-                      </h4>
-                      <p className="text-xs text-slate-300 max-w-md">
-                        Klik tombol "Mulai Cerita" di bawah untuk menyaksikan tahapan pemahaman interaktif materi ini!
-                      </p>
+          return (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="bg-white rounded-3xl p-5 sm:p-6 border border-rose-100 shadow-sm space-y-4">
+                {/* Top Bar inside Video Tab */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-rose-600 uppercase tracking-wider">
+                        {videoMode === 'video' && parsedVideo ? 'Video Pembelajaran Streaming' : 'Teater Animasi Interaktif'}
+                      </span>
+                      {parsedVideo && (
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                          Video Kustom Aktif ✓
+                        </span>
+                      )}
                     </div>
-                  )}
-
-                  {videoSummary ? (
-                    videoScene > 0 && videoSummary.stages[videoScene - 1] && (
-                      <div className="space-y-2 animate-in fade-in">
-                        <span className="text-5xl">{videoSummary.stages[videoScene - 1].icon}</span>
-                        <h4 className="text-base font-bold text-emerald-400 font-display">
-                          {videoSummary.stages[videoScene - 1].stageName} ({videoSummary.stages[videoScene - 1].years})
-                        </h4>
-                        <p className="text-xs text-slate-200 max-w-md">
-                          "{videoSummary.stages[videoScene - 1].desc}"
-                        </p>
-                      </div>
-                    )
-                  ) : (
-                    <>
-                      {videoScene === 1 && (
-                        <div className="space-y-2 animate-in fade-in">
-                          <span className="text-5xl">🕰️ 🐎 📜</span>
-                          <h4 className="text-base font-bold text-amber-400 font-display">
-                            Babak 1: Zaman DAHULU (Kakek & Nenek)
-                          </h4>
-                          <p className="text-xs text-slate-200 max-w-md">
-                            "Malam hari diterangi lampu minyak tanah teplok berjelaga. Bepergian naik delman kuda atau sepeda onthel. Mengirim kabar menggunakan surat pos yang butuh berminggu-minggu."
-                          </p>
-                        </div>
-                      )}
-
-                      {videoScene === 2 && (
-                        <div className="space-y-2 animate-in fade-in">
-                          <span className="text-5xl">📱 🚗 🚄</span>
-                          <h4 className="text-base font-bold text-blue-400 font-display">
-                            Babak 2: Masa KINI (Zaman Kita Sekarang)
-                          </h4>
-                          <p className="text-xs text-slate-200 max-w-md">
-                            "Rumah terang dengan lampu LED hemat listrik. Komunikasi tatap muka dengan video call ponsel dalam 1 detik. Bepergian naik mobil listrik dan Kereta Cepat Whoosh!"
-                          </p>
-                        </div>
-                      )}
-
-                      {videoScene === 3 && (
-                        <div className="space-y-2 animate-in fade-in">
-                          <span className="text-5xl">🛸 🤖 🌿</span>
-                          <h4 className="text-base font-bold text-emerald-400 font-display">
-                            Babak 3: Masa NANTI (Impian Masa Depan)
-                          </h4>
-                          <p className="text-xs text-slate-200 max-w-md">
-                            "Mobil terbang bertenaga surya bebas polusi, robot pelayan yang ramah, komunikasi hologram tiga dimensi, dan kota hijau yang asri bebas sampah plastik!"
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Controls */}
-                <div className="bg-slate-900/90 backdrop-blur-md p-3 rounded-xl flex items-center justify-between gap-3 text-white text-xs border border-slate-700">
-                  <button
-                    onClick={() => {
-                      sound.playClick();
-                      speech.stop();
-                      const next = (videoScene + 1) % 4;
-                      setVideoScene(next);
-                    }}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 rounded-lg font-bold transition-colors cursor-pointer"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>{videoScene === 0 ? 'Mulai Cerita' : `Lanjut Babak (${videoScene}/3)`}</span>
-                  </button>
-
-                  <div className="flex-1 flex items-center gap-2 px-2">
-                    <div className="flex-1 bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                      <div
-                        className="bg-rose-500 h-full transition-all duration-300"
-                        style={{ width: `${(videoScene / 3) * 100}%` }}
-                      />
-                    </div>
-                    <span className="font-mono text-[10px] text-slate-400">
-                      Babak {videoScene} dari 3
-                    </span>
+                    <h3 className="text-xl sm:text-2xl font-bold text-slate-800 font-display mt-0.5">
+                      {videoMode === 'video' && parsedVideo
+                        ? (videoSummary?.title || `Video Pembelajaran: ${theme?.judulTema || ''}`)
+                        : (videoSummary?.title || 'Petualangan Menjelajahi Masa: Dahulu, Kini, & Nanti')}
+                    </h3>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      sound.playClick();
-                      speech.stop();
-                      setVideoScene(0);
-                    }}
-                    className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
-                    title="Ulangi dari Awal"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
+                  {/* Mode switcher & Video settings button */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {parsedVideo && (
+                      <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playClick();
+                            setVideoMode('video');
+                          }}
+                          className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                            videoMode === 'video'
+                              ? 'bg-rose-600 text-white shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <Video className="w-3.5 h-3.5" />
+                          <span>Video Streaming</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playClick();
+                            setVideoMode('animation');
+                          }}
+                          className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                            videoMode === 'animation'
+                              ? 'bg-rose-600 text-white shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <Film className="w-3.5 h-3.5" />
+                          <span>Teater Animasi</span>
+                        </button>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sound.playClick();
+                        setIsVideoModalOpen(true);
+                      }}
+                      className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      title="Ubah atau masukkan link video YouTube/MP4"
+                    >
+                      <Settings className="w-3.5 h-3.5 text-rose-600" />
+                      <span>{customVideoUrl ? 'Ganti Video URL' : 'Masukkan Video Sendiri'}</span>
+                    </button>
+                  </div>
                 </div>
+
+                {/* VIEW 1: EMBEDDED STREAMING VIDEO PLAYER (YOUTUBE / DRIVE / MP4) */}
+                {videoMode === 'video' && parsedVideo ? (
+                  <div className="space-y-3">
+                    <div className="relative rounded-2xl overflow-hidden bg-slate-950 aspect-video max-w-4xl mx-auto shadow-2xl border border-slate-800">
+                      {parsedVideo.type === 'mp4' ? (
+                        <video
+                          src={parsedVideo.embedUrl}
+                          controls
+                          autoPlay
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <iframe
+                          src={parsedVideo.embedUrl}
+                          title="Video Pembelajaran"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                          className="w-full h-full border-0"
+                        />
+                      )}
+                    </div>
+
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-900">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>
+                          <strong>Video Mengalir Lancar:</strong> Video berputar terus tanpa perlu menekan tombol babak secara manual.
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playClick();
+                            setIsVideoModalOpen(true);
+                          }}
+                          className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                        >
+                          Ganti Video Lain
+                        </button>
+                        <span className="text-emerald-300">•</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playClick();
+                            setVideoMode('animation');
+                          }}
+                          className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                        >
+                          Lihat Teater Animasi
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* VIEW 2: TEATER ANIMASI LUMI WITH AUTO-PLAY & MANUAL CONTROLS */
+                  <div className="space-y-3">
+                    {/* Prompt to add custom video if none is set yet */}
+                    {!parsedVideo && (
+                      <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>
+                            Ingin memasukkan video YouTube atau MP4 pilihanmu agar berputar terus tanpa pencet babak?
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playClick();
+                            setIsVideoModalOpen(true);
+                          }}
+                          className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition cursor-pointer text-xs shrink-0 shadow-2xs"
+                        >
+                          + Pasang Video YouTube/MP4
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Auto-Play Control Bar on Top of Theater */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap bg-slate-50 p-2.5 rounded-2xl border border-slate-200">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playClick();
+                            setIsAutoPlayingAnimation(!isAutoPlayingAnimation);
+                            if (!isAutoPlayingAnimation) {
+                              setAutoPlayCountdown(9);
+                              // Trigger speech for current scene
+                              const curNarration = videoSummary
+                                ? videoScene === 0
+                                  ? `Selamat Datang di ${videoSummary.title}!`
+                                  : `${videoSummary.stages[videoScene - 1]?.stageName || `Tahap ${videoScene}`}: ${videoSummary.stages[videoScene - 1]?.desc || ''}`
+                                : videoScene === 0
+                                ? 'Selamat Datang di Teater Mesin Waktu IPAS!'
+                                : videoScene === 1
+                                ? 'Babak 1: Zaman Dahulu. Kakek dan Nenek.'
+                                : videoScene === 2
+                                ? 'Babak 2: Masa Kini.'
+                                : 'Babak 3: Masa Nanti.';
+                              speech.speak(curNarration);
+                            } else {
+                              speech.stop();
+                            }
+                          }}
+                          className={`px-3.5 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+                            isAutoPlayingAnimation
+                              ? 'bg-amber-500 text-white animate-pulse'
+                              : 'bg-rose-600 hover:bg-rose-700 text-white'
+                          }`}
+                        >
+                          {isAutoPlayingAnimation ? (
+                            <>
+                              <Pause className="w-3.5 h-3.5" />
+                              <span>Jeda Putar Otomatis</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>Putar Otomatis (Auto-Play)</span>
+                            </>
+                          )}
+                        </button>
+
+                        {isAutoPlayingAnimation && (
+                          <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-lg">
+                            Babak berganti otomatis: <strong>{autoPlayCountdown}s</strong>
+                          </span>
+                        )}
+                      </div>
+
+                      <SpeechButton
+                        id={`video-scene-speech-${videoScene}`}
+                        textToSpeak={
+                          videoSummary
+                            ? videoScene === 0
+                              ? `Selamat Datang di ${videoSummary.title}! Klik tombol Mulai Cerita di bawah untuk menyaksikan tahapan pemahaman materi ${theme?.judulTema || ''}.`
+                              : `${videoSummary.stages[videoScene - 1]?.stageName || `Tahap ${videoScene}`}: ${videoSummary.stages[videoScene - 1]?.years || ''}. ${videoSummary.stages[videoScene - 1]?.desc || ''}`
+                            : videoScene === 0
+                            ? 'Selamat Datang di Teater Mesin Waktu IPAS! Klik tombol Mulai Cerita di bawah untuk menyaksikan bagaimana kakek-nenek hidup zaman dahulu, bagaimana kita hidup masa kini, dan impian masa depan nanti!'
+                            : videoScene === 1
+                            ? 'Babak 1: Zaman Dahulu. Kakek dan Nenek. Malam hari diterangi lampu minyak tanah teplok berjelaga. Bepergian naik delman kuda atau sepeda onthel. Mengirim kabar menggunakan surat pos yang butuh berminggu-minggu.'
+                            : videoScene === 2
+                            ? 'Babak 2: Masa Kini. Zaman Kita Sekarang. Rumah terang dengan lampu LED hemat listrik. Komunikasi tatap muka dengan video call ponsel dalam 1 detik. Bepergian naik mobil listrik dan Kereta Cepat Whoosh!'
+                            : 'Babak 3: Masa Nanti. Impian Masa Depan. Mobil terbang bertenaga surya bebas polusi, robot pelayan yang ramah, komunikasi hologram tiga dimensi, dan kota hijau yang asri bebas sampah plastik!'
+                        }
+                        label="Dengarkan Suara Babak Ini"
+                        size="sm"
+                        variant="primary"
+                      />
+                    </div>
+
+                    {/* Simulated Story Stage */}
+                    <div className="relative rounded-2xl overflow-hidden bg-slate-950 aspect-video max-w-3xl mx-auto flex flex-col justify-between p-4 shadow-xl border border-slate-800">
+                      <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+                        {videoScene === 0 && (
+                          <div className="space-y-3 animate-pulse-subtle">
+                            <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 mx-auto flex items-center justify-center border border-rose-500/50">
+                              <Play className="w-8 h-8 fill-rose-400 ml-1" />
+                            </div>
+                            <h4 className="text-lg font-bold text-white font-display">
+                              {videoSummary?.title || 'Selamat Datang di Teater Mesin Waktu IPAS!'}
+                            </h4>
+                            <p className="text-xs text-slate-300 max-w-md">
+                              Klik tombol "Mulai Cerita" di bawah atau aktifkan "Putar Otomatis" untuk menyaksikan tahapan pemahaman interaktif materi ini!
+                            </p>
+                          </div>
+                        )}
+
+                        {videoSummary ? (
+                          videoScene > 0 && videoSummary.stages[videoScene - 1] && (
+                            <div className="space-y-2 animate-in fade-in">
+                              <span className="text-5xl">{videoSummary.stages[videoScene - 1].icon}</span>
+                              <h4 className="text-base font-bold text-emerald-400 font-display">
+                                {videoSummary.stages[videoScene - 1].stageName} ({videoSummary.stages[videoScene - 1].years})
+                              </h4>
+                              <p className="text-xs text-slate-200 max-w-md">
+                                "{videoSummary.stages[videoScene - 1].desc}"
+                              </p>
+                            </div>
+                          )
+                        ) : (
+                          <>
+                            {videoScene === 1 && (
+                              <div className="space-y-2 animate-in fade-in">
+                                <span className="text-5xl">🕰️ 🐎 📜</span>
+                                <h4 className="text-base font-bold text-amber-400 font-display">
+                                  Babak 1: Zaman DAHULU (Kakek & Nenek)
+                                </h4>
+                                <p className="text-xs text-slate-200 max-w-md">
+                                  "Malam hari diterangi lampu minyak tanah teplok berjelaga. Bepergian naik delman kuda atau sepeda onthel. Mengirim kabar menggunakan surat pos yang butuh berminggu-minggu."
+                                </p>
+                              </div>
+                            )}
+
+                            {videoScene === 2 && (
+                              <div className="space-y-2 animate-in fade-in">
+                                <span className="text-5xl">📱 🚗 🚄</span>
+                                <h4 className="text-base font-bold text-blue-400 font-display">
+                                  Babak 2: Masa KINI (Zaman Kita Sekarang)
+                                </h4>
+                                <p className="text-xs text-slate-200 max-w-md">
+                                  "Rumah terang dengan lampu LED hemat listrik. Komunikasi tatap muka dengan video call ponsel dalam 1 detik. Bepergian naik mobil listrik dan Kereta Cepat Whoosh!"
+                                </p>
+                              </div>
+                            )}
+
+                            {videoScene === 3 && (
+                              <div className="space-y-2 animate-in fade-in">
+                                <span className="text-5xl">🛸 🤖 🌿</span>
+                                <h4 className="text-base font-bold text-emerald-400 font-display">
+                                  Babak 3: Masa NANTI (Impian Masa Depan)
+                                </h4>
+                                <p className="text-xs text-slate-200 max-w-md">
+                                  "Mobil terbang bertenaga surya bebas polusi, robot pelayan yang ramah, komunikasi hologram tiga dimensi, dan kota hijau yang asri bebas sampah plastik!"
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Controls Bottom Bar */}
+                      <div className="bg-slate-900/90 backdrop-blur-md p-3 rounded-xl flex items-center justify-between gap-2 text-white text-xs border border-slate-700">
+                        {/* Prev button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playClick();
+                            speech.stop();
+                            setVideoScene((prev) => (prev > 0 ? prev - 1 : 0));
+                          }}
+                          disabled={videoScene === 0}
+                          className="p-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded-lg transition cursor-pointer"
+                          title="Babak Sebelumnya"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+
+                        {/* Next / Play button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playClick();
+                            speech.stop();
+                            const total = (videoSummary?.stages?.length || 3) + 1;
+                            const next = (videoScene + 1) % total;
+                            setVideoScene(next);
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 rounded-lg font-bold transition-colors cursor-pointer"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>
+                            {videoScene === 0
+                              ? 'Mulai Cerita'
+                              : `Lanjut Babak (${videoScene}/${videoSummary?.stages?.length || 3})`}
+                          </span>
+                        </button>
+
+                        {/* Progress Indicator */}
+                        <div className="flex-1 flex items-center gap-2 px-2">
+                          <div className="flex-1 bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className="bg-rose-500 h-full transition-all duration-300"
+                              style={{ width: `${(videoScene / (videoSummary?.stages?.length || 3)) * 100}%` }}
+                            />
+                          </div>
+                          <span className="font-mono text-[10px] text-slate-400">
+                            {videoScene}/{videoSummary?.stages?.length || 3}
+                          </span>
+                        </div>
+
+                        {/* Restart button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playClick();
+                            speech.stop();
+                            setVideoScene(0);
+                            setAutoPlayCountdown(9);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                          title="Ulangi dari Awal"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </main>
 
       {/* Footer */}
@@ -788,6 +1170,17 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
       <SafetyHelpModal
         isOpen={isSafetyHelpOpen}
         onClose={() => setIsSafetyHelpOpen(false)}
+      />
+
+      {/* Video Customizer Modal for adding YouTube / Google Drive / MP4 links */}
+      <VideoCustomizerModal
+        isOpen={isVideoModalOpen}
+        onClose={() => setIsVideoModalOpen(false)}
+        currentVideoUrl={customVideoUrl}
+        onSaveVideoUrl={handleSaveVideoUrl}
+        themeTitle={theme?.judulTema || 'Pembelajaran'}
+        recommendedUrl={recommendedVideo.url}
+        recommendedTitle={recommendedVideo.title}
       />
     </div>
   );

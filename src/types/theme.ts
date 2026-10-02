@@ -103,6 +103,8 @@ export interface ThemeConfig {
     videoSummary?: {
       title: string;
       stages: { stageName: string; years: string; desc: string; icon: string }[];
+      videoUrl?: string;
+      videoDescription?: string;
     };
   };
   bermain: {
