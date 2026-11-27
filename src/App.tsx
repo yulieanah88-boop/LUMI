@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import {
   ActiveScreen,
   StudentInfo,
@@ -16,7 +17,17 @@ import {
 } from './types';
 import { DEFAULT_DEVELOPER } from './data/appData';
 import { ACHIEVEMENT_BADGES } from './data/achievementBadges';
-import { getActiveTheme, setActiveThemeId } from './data/themes';
+import {
+  ACTIVE_THEME_STORAGE_KEY,
+  getActiveTheme,
+  getThemeById,
+  setActiveThemeId,
+} from './data/themes';
+import { auth } from './firebase';
+import {
+  subscribePublishedCustomThemes,
+  syncLocalThemesToFirestore,
+} from './services/firebaseThemes';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ThemeSelectScreen } from './components/ThemeSelectScreen';
 import { ThemeGeneratorModal } from './components/ThemeGeneratorModal';
@@ -50,11 +61,14 @@ export default function App() {
     refleksi: false,
   });
 
-  // Modals
+  // Modals & Cloud Sync State
   const [isCertificateOpen, setIsCertificateOpen] = useState(false);
   const [isPromptGuideOpen, setIsPromptGuideOpen] = useState(false);
   const [isThemeGeneratorOpen, setIsThemeGeneratorOpen] = useState(false);
   const [newlyUnlockedBadge, setNewlyUnlockedBadge] = useState<AchievementBadge | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [cloudThemes, setCloudThemes] = useState<ThemeConfig[]>([]);
+  const [isCloudThemesLoading, setIsCloudThemesLoading] = useState(true);
 
   // Helper to load theme-specific state (progress, score, reflection)
   const loadThemeState = (themeId: string) => {
@@ -148,6 +162,44 @@ export default function App() {
     } catch {
       // Ignore
     }
+  }, []);
+
+  // Firebase Auth listener + automatic upload of any unsynced local custom themes
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      if (user && user.emailVerified) {
+        syncLocalThemesToFirestore(user).catch((err) => {
+          console.warn('Sinkronisasi tema lokal ke Cloud tertunda:', err);
+        });
+      }
+    });
+    return () => unsubAuth();
+  }, []);
+
+  // Real-time Firestore listener for all published custom themes (cross-account & cross-device)
+  useEffect(() => {
+    const unsubThemes = subscribePublishedCustomThemes(
+      (themes) => {
+        setCloudThemes(themes);
+        setIsCloudThemesLoading(false);
+        try {
+          const savedActiveId = localStorage.getItem(ACTIVE_THEME_STORAGE_KEY);
+          if (savedActiveId) {
+            const resolved = getThemeById(savedActiveId, themes);
+            setActiveTheme(resolved);
+            loadThemeState(resolved.id);
+          }
+        } catch {
+          // Ignore
+        }
+      },
+      (err) => {
+        console.warn('Gagal memuat tema Cloud:', err);
+        setIsCloudThemesLoading(false);
+      }
+    );
+    return () => unsubThemes();
   }, []);
 
   // Global Audio Setup: Auto-Ducking on TTS and First-Gesture Audio Activation
@@ -335,6 +387,9 @@ export default function App() {
       {activeScreen === 'theme_select' && (
         <ThemeSelectScreen
           currentThemeId={activeTheme.id}
+          cloudThemes={cloudThemes}
+          isCloudLoading={isCloudThemesLoading}
+          firebaseUser={firebaseUser}
           onSelectTheme={handleSelectTheme}
           onOpenGenerator={() => setIsThemeGeneratorOpen(true)}
           onBackToWelcome={() => setActiveScreen('welcome')}
@@ -465,6 +520,7 @@ export default function App() {
       {/* MODAL 4: Generator Tema Kustom (Mode Guru) */}
       <ThemeGeneratorModal
         isOpen={isThemeGeneratorOpen}
+        firebaseUser={firebaseUser}
         onClose={() => setIsThemeGeneratorOpen(false)}
         onThemeCreated={(createdTheme) => {
           setIsThemeGeneratorOpen(false);

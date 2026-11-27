@@ -1,0 +1,139 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net (Default-Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable Hardened Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'yulianah571@guru.sd.belajar.id' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidCustomTheme(data) {
+      return data.keys().hasAll([
+          'id', 'judulTema', 'subJudul', 'mataPelajaran', 'fase', 'kelas',
+          'emojiMaskot', 'sapaanLumi', 'deskripsiSingkat', 'capaianPembelajaran',
+          'palet', 'tujuanPembelajaran', 'belajar', 'bermain', 'berlatih',
+          'refleksi', 'sumberBelajar', 'glosarium', 'sertifikat', 'badges',
+          'isCustom', 'isPublished', 'creatorUid', 'creatorName', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'judulTema', 'subJudul', 'mataPelajaran', 'fase', 'kelas',
+          'emojiMaskot', 'sapaanLumi', 'deskripsiSingkat', 'capaianPembelajaran',
+          'palet', 'tujuanPembelajaran', 'belajar', 'bermain', 'berlatih',
+          'refleksi', 'sumberBelajar', 'glosarium', 'sertifikat', 'badges',
+          'isCustom', 'isPublished', 'creatorUid', 'creatorName', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.judulTema is string && data.judulTema.size() >= 1 && data.judulTema.size() <= 200
+        && data.subJudul is string && data.subJudul.size() <= 300
+        && data.mataPelajaran is string && data.mataPelajaran.size() >= 1 && data.mataPelajaran.size() <= 150
+        && data.fase is string && data.fase.size() >= 1 && data.fase.size() <= 60
+        && data.kelas is string && data.kelas.size() >= 1 && data.kelas.size() <= 100
+        && data.emojiMaskot is string && data.emojiMaskot.size() >= 1 && data.emojiMaskot.size() <= 16
+        && data.sapaanLumi is string && data.sapaanLumi.size() <= 1000
+        && data.deskripsiSingkat is string && data.deskripsiSingkat.size() <= 500
+        && data.capaianPembelajaran is string && data.capaianPembelajaran.size() <= 2000
+        && data.palet is map
+        && data.tujuanPembelajaran is list && data.tujuanPembelajaran.size() >= 1 && data.tujuanPembelajaran.size() <= 12
+        && data.tujuanPembelajaran[0] is map
+        && data.belajar is map
+        && data.bermain is map
+        && data.berlatih is map
+        && data.refleksi is map
+        && data.sumberBelajar is list && data.sumberBelajar.size() <= 20 && (data.sumberBelajar.size() == 0 || data.sumberBelajar[0] is map)
+        && data.glosarium is list && data.glosarium.size() <= 50 && (data.glosarium.size() == 0 || data.glosarium[0] is map)
+        && data.sertifikat is map
+        && data.badges is list && data.badges.size() >= 1 && data.badges.size() <= 10
+        && data.badges[0] is map
+        && data.isCustom == true
+        && data.isPublished is bool
+        && isValidId(data.creatorUid)
+        && data.creatorName is string && data.creatorName.size() <= 120
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Connection check document (read-only single doc)
+    match /test/{docId} {
+      allow get: if docId == 'connection';
+      allow list, write: if false;
+    }
+
+    // Admin registry
+    match /admins/{adminId} {
+      allow get: if isVerifiedUser() && isValidId(adminId) && request.auth.uid == adminId;
+      allow list, create, update, delete: if false;
+    }
+
+    // Shared Custom Themes collection
+    match /custom_themes/{themeId} {
+      allow get: if isValidId(themeId) && (
+        existing().isPublished == true ||
+        (isVerifiedUser() && (existing().creatorUid == request.auth.uid || isAdmin()))
+      );
+
+      allow list: if existing().isPublished == true ||
+        (isVerifiedUser() && existing().creatorUid == request.auth.uid);
+
+      allow create: if isVerifiedUser()
+        && isValidId(themeId)
+        && isValidCustomTheme(incoming())
+        && incoming().id == themeId
+        && incoming().creatorUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedUser()
+        && isValidId(themeId)
+        && isValidCustomTheme(incoming())
+        && incoming().id == existing().id
+        && incoming().creatorUid == existing().creatorUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (existing().creatorUid == request.auth.uid || isAdmin())
+        && (
+          // Action: Edit theme metadata or content
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'judulTema', 'subJudul', 'mataPelajaran', 'fase', 'kelas',
+            'emojiMaskot', 'sapaanLumi', 'deskripsiSingkat', 'capaianPembelajaran',
+            'palet', 'tujuanPembelajaran', 'belajar', 'bermain', 'berlatih',
+            'refleksi', 'sumberBelajar', 'glosarium', 'sertifikat', 'badges',
+            'updatedAt'
+          ]) ||
+          // Action: Toggle publish visibility
+          incoming().diff(existing()).affectedKeys().hasOnly(['isPublished', 'updatedAt'])
+        );
+
+      allow delete: if isVerifiedUser()
+        && isValidId(themeId)
+        && (existing().creatorUid == request.auth.uid || isAdmin());
+    }
+  }
+}

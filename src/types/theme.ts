@@ -126,5 +126,8 @@ export interface ThemeConfig {
   sertifikat: ThemeCertificateConfig;
   badges: AchievementBadge[];
   isCustom?: boolean;
+  isPublished?: boolean;
+  creatorUid?: string;
+  creatorName?: string;
   sensitivityNote?: ThemeSensitivityNote;
 }

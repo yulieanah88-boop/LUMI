@@ -11,20 +11,29 @@ import {
   AlertCircle,
   Save,
   CheckCircle2,
+  Cloud,
 } from 'lucide-react';
+import { User } from 'firebase/auth';
 import { ThemeConfig } from '../types';
 import { generateThemeWithAI, validateTheme } from '../utils/themeGenerator';
 import { saveCustomTheme } from '../data/themes';
+import {
+  saveCustomThemeToFirestore,
+  signInWithGooglePopup,
+} from '../services/firebaseThemes';
+import { auth } from '../firebase';
 import { sound } from '../utils/audio';
 
 interface ThemeGeneratorModalProps {
   isOpen: boolean;
+  firebaseUser?: User | null;
   onClose: () => void;
   onThemeCreated: (theme: ThemeConfig) => void;
 }
 
 export const ThemeGeneratorModal: React.FC<ThemeGeneratorModalProps> = ({
   isOpen,
+  firebaseUser = null,
   onClose,
   onThemeCreated,
 }) => {
@@ -35,6 +44,7 @@ export const ThemeGeneratorModal: React.FC<ThemeGeneratorModalProps> = ({
   const [paletteId, setPaletteId] = useState('rose');
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isSavingCloud, setIsSavingCloud] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [generatedTheme, setGeneratedTheme] = useState<ThemeConfig | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -87,12 +97,9 @@ export const ThemeGeneratorModal: React.FC<ThemeGeneratorModalProps> = ({
     }
   };
 
-  const handleSaveAndUse = () => {
-    if (!generatedTheme) return;
-
-    sound.playCorrect();
-
-    const finalizedTheme: ThemeConfig = {
+  const buildFinalizedTheme = (): ThemeConfig | null => {
+    if (!generatedTheme) return null;
+    return {
       ...generatedTheme,
       judulTema: editTitle.trim() || generatedTheme.judulTema,
       subJudul: editSubTitle.trim() || generatedTheme.subJudul,
@@ -103,7 +110,39 @@ export const ThemeGeneratorModal: React.FC<ThemeGeneratorModalProps> = ({
         themeTitleOnCert: (editTitle.trim() || generatedTheme.judulTema).toUpperCase(),
       },
     };
+  };
 
+  const handleSaveAndUseCloud = async () => {
+    const finalizedTheme = buildFinalizedTheme();
+    if (!finalizedTheme) return;
+
+    setIsSavingCloud(true);
+    setErrorMsg('');
+    try {
+      let user = firebaseUser || auth.currentUser;
+      if (!user) {
+        user = await signInWithGooglePopup();
+      }
+      const savedCloudTheme = await saveCustomThemeToFirestore(finalizedTheme, user);
+      sound.playCorrect();
+      onThemeCreated(savedCloudTheme);
+      onClose();
+    } catch (err: any) {
+      if (err?.code === 'auth/popup-closed-by-user') {
+        setErrorMsg('Login Google dibatalkan. Masuk Google diperlukan agar tema tersimpan ke Cloud untuk semua akun.');
+      } else {
+        setErrorMsg('Gagal menyimpan ke Cloud: ' + (err?.message || 'Coba lagi atau simpan lokal sementara.'));
+      }
+      sound.playWrong();
+    } finally {
+      setIsSavingCloud(false);
+    }
+  };
+
+  const handleSaveLocalOnly = () => {
+    const finalizedTheme = buildFinalizedTheme();
+    if (!finalizedTheme) return;
+    sound.playCorrect();
     saveCustomTheme(finalizedTheme);
     onThemeCreated(finalizedTheme);
     onClose();
@@ -402,33 +441,65 @@ export const ThemeGeneratorModal: React.FC<ThemeGeneratorModalProps> = ({
                   </p>
                 </div>
               </div>
+              {errorMsg && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
+        <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap shrink-0">
           {generatedTheme ? (
             <>
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playClick();
-                  setGeneratedTheme(null);
-                }}
-                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition flex items-center gap-1.5"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Rancang Ulang</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isSavingCloud}
+                  onClick={() => {
+                    sound.playClick();
+                    setGeneratedTheme(null);
+                  }}
+                  className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition flex items-center gap-1.5 disabled:opacity-60"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Rancang Ulang</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isSavingCloud}
+                  onClick={handleSaveLocalOnly}
+                  className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer transition disabled:opacity-60"
+                >
+                  Simpan Lokal Saja
+                </button>
+              </div>
 
               <button
                 type="button"
-                onClick={handleSaveAndUse}
-                className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl text-xs font-bold shadow-md transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+                disabled={isSavingCloud}
+                onClick={handleSaveAndUseCloud}
+                className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl text-xs font-bold shadow-md transition cursor-pointer flex items-center gap-1.5 active:scale-95 disabled:opacity-70"
               >
-                <Save className="w-4 h-4" />
-                <span>Simpan Tema &amp; Gunakan Sekarang</span>
+                {isSavingCloud ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Menyimpan ke Cloud...</span>
+                  </>
+                ) : (
+                  <>
+                    <Cloud className="w-4 h-4" />
+                    <span>
+                      {firebaseUser || auth.currentUser
+                        ? 'Simpan ke Cloud & Gunakan'
+                        : 'Masuk Google & Simpan ke Cloud'}
+                    </span>
+                  </>
+                )}
               </button>
             </>
           ) : (

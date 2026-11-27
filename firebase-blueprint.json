@@ -1,0 +1,191 @@
+{
+  "entities": {
+    "CustomTheme": {
+      "title": "CustomTheme",
+      "description": "Tema pembelajaran interaktif kustom yang dibuat oleh guru untuk digunakan lintas akun Google dan perangkat.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID unik tema kustom",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "judulTema": {
+          "type": "string",
+          "description": "Judul utama tema pembelajaran",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "subJudul": {
+          "type": "string",
+          "description": "Sub judul tema pembelajaran",
+          "maxLength": 300
+        },
+        "mataPelajaran": {
+          "type": "string",
+          "description": "Nama mata pelajaran",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "fase": {
+          "type": "string",
+          "description": "Fase Kurikulum Merdeka",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "kelas": {
+          "type": "string",
+          "description": "Jenjang kelas",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "emojiMaskot": {
+          "type": "string",
+          "description": "Emoji maskot tema",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "sapaanLumi": {
+          "type": "string",
+          "description": "Kalimat sapaan Lumi sesuai tema",
+          "maxLength": 1000
+        },
+        "deskripsiSingkat": {
+          "type": "string",
+          "description": "Ringkasan deskripsi kartu tema",
+          "maxLength": 500
+        },
+        "capaianPembelajaran": {
+          "type": "string",
+          "description": "Teks Capaian Pembelajaran",
+          "maxLength": 2000
+        },
+        "palet": {
+          "type": "object",
+          "description": "Konfigurasi palet warna pastel tema"
+        },
+        "tujuanPembelajaran": {
+          "type": "array",
+          "description": "Daftar tujuan pembelajaran"
+        },
+        "belajar": {
+          "type": "object",
+          "description": "Konten Menu Belajar (pertanyaan pemantik, materi bab, ringkasan video)"
+        },
+        "bermain": {
+          "type": "object",
+          "description": "Konten Menu Bermain (simulasi dan 5 tantangan game)"
+        },
+        "berlatih": {
+          "type": "object",
+          "description": "Konten Menu Berlatih (10 soal HOTS)"
+        },
+        "refleksi": {
+          "type": "object",
+          "description": "Konfigurasi Menu Refleksi"
+        },
+        "sumberBelajar": {
+          "type": "array",
+          "description": "Daftar referensi sumber belajar"
+        },
+        "glosarium": {
+          "type": "array",
+          "description": "Daftar istilah glosarium"
+        },
+        "sertifikat": {
+          "type": "object",
+          "description": "Konfigurasi teks sertifikat tema"
+        },
+        "badges": {
+          "type": "array",
+          "description": "Daftar 5 lencana pencapaian tema"
+        },
+        "isCustom": {
+          "type": "boolean",
+          "description": "Penanda tema kustom buatan guru"
+        },
+        "isPublished": {
+          "type": "boolean",
+          "description": "Status publikasi tema agar dapat diakses oleh akun Google lain"
+        },
+        "creatorUid": {
+          "type": "string",
+          "description": "UID pembuat tema (Firebase Auth UID)",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "creatorName": {
+          "type": "string",
+          "description": "Nama tampilan guru pembuat tema",
+          "maxLength": 120
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu pembuatan tema (server timestamp)"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu pembaruan terakhir tema (server timestamp)"
+        }
+      },
+      "required": [
+        "id",
+        "judulTema",
+        "subJudul",
+        "mataPelajaran",
+        "fase",
+        "kelas",
+        "emojiMaskot",
+        "sapaanLumi",
+        "deskripsiSingkat",
+        "capaianPembelajaran",
+        "palet",
+        "tujuanPembelajaran",
+        "belajar",
+        "bermain",
+        "berlatih",
+        "refleksi",
+        "sumberBelajar",
+        "glosarium",
+        "sertifikat",
+        "badges",
+        "isCustom",
+        "isPublished",
+        "creatorUid",
+        "creatorName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Dokumen penanda akun admin pengelola tema.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        }
+      },
+      "required": ["uid"]
+    }
+  },
+  "firestore": {
+    "/custom_themes/{themeId}": {
+      "schema": {
+        "$ref": "#/entities/CustomTheme"
+      },
+      "description": "Koleksi tema kustom buatan guru yang disinkronkan secara cloud agar muncul di semua akun Google dan perangkat."
+    },
+    "/admins/{adminId}": {
+      "schema": {
+        "$ref": "#/entities/AdminUser"
+      },
+      "description": "Daftar UID admin yang berhak mengelola tema."
+    }
+  }
+}
