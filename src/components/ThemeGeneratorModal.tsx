@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   X,
@@ -54,6 +54,14 @@ export const ThemeGeneratorModal: React.FC<ThemeGeneratorModalProps> = ({
   const [editSubTitle, setEditSubTitle] = useState('');
   const [editMascot, setEditMascot] = useState('');
   const [editCP, setEditCP] = useState('');
+
+  // Reset form cleanly whenever the modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      setErrorMsg('');
+      setIsSavingCloud(false);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -123,15 +131,30 @@ export const ThemeGeneratorModal: React.FC<ThemeGeneratorModalProps> = ({
       if (!user) {
         user = await signInWithGooglePopup();
       }
-      const savedCloudTheme = await saveCustomThemeToFirestore(finalizedTheme, user);
+      if (!user.emailVerified) {
+        setErrorMsg('Email akun Google belum terverifikasi oleh Google. Gunakan akun Google terverifikasi atau pilih "Simpan Lokal Saja".');
+        sound.playWrong();
+        return;
+      }
+      const savedCloudTheme = await saveCustomThemeToFirestore(finalizedTheme, user, {
+        forceCreate: true,
+      });
       sound.playCorrect();
+      setGeneratedTheme(null);
+      setTopic('');
+      setGoals('');
       onThemeCreated(savedCloudTheme);
       onClose();
     } catch (err: any) {
-      if (err?.code === 'auth/popup-closed-by-user') {
-        setErrorMsg('Login Google dibatalkan. Masuk Google diperlukan agar tema tersimpan ke Cloud untuk semua akun.');
+      const code = err?.code || '';
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        setErrorMsg('Login Google ditutup sebelum selesai. Silakan selesaikan login Google atau pilih "Simpan Lokal Saja".');
+      } else if (code === 'auth/popup-blocked') {
+        setErrorMsg('Popup login Google diblokir browser. Izinkan popup di browser atau pilih "Simpan Lokal Saja" dulu.');
+      } else if (code === 'auth/unauthorized-domain') {
+        setErrorMsg('Domain preview ini belum diizinkan untuk login popup Google. Gunakan "Simpan Lokal Saja" atau buka dari halaman utama.');
       } else {
-        setErrorMsg('Gagal menyimpan ke Cloud: ' + (err?.message || 'Coba lagi atau simpan lokal sementara.'));
+        setErrorMsg('Gagal menyimpan ke Cloud: ' + (err?.message || 'Silakan coba lagi atau pilih "Simpan Lokal Saja".'));
       }
       sound.playWrong();
     } finally {
@@ -144,6 +167,10 @@ export const ThemeGeneratorModal: React.FC<ThemeGeneratorModalProps> = ({
     if (!finalizedTheme) return;
     sound.playCorrect();
     saveCustomTheme(finalizedTheme);
+    setGeneratedTheme(null);
+    setTopic('');
+    setGoals('');
+    setErrorMsg('');
     onThemeCreated(finalizedTheme);
     onClose();
   };
@@ -424,14 +451,30 @@ export const ThemeGeneratorModal: React.FC<ThemeGeneratorModalProps> = ({
                 </div>
               </div>
 
-              {/* Sample HOTS Question Preview */}
-              <div>
-                <span className="text-xs font-bold text-slate-700 block mb-1">
-                  Contoh Soal HOTS yang Dihasilkan:
+              {/* Sample Content Preview for Belajar, Bermain, & Berlatih */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-700 block">
+                  Pratinjau Isi Belajar, Bermain &amp; Berlatih yang Dihasilkan AI:
                 </span>
+                <div className="p-3 bg-rose-50/60 border border-rose-200 rounded-xl text-xs space-y-1">
+                  <span className="font-bold text-rose-800 block">
+                    📖 Menu Belajar ({generatedTheme.belajar.materiBab[0]?.title}):
+                  </span>
+                  <p className="text-slate-700 leading-relaxed">
+                    {generatedTheme.belajar.materiBab[0]?.summary}
+                  </p>
+                </div>
+                <div className="p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs space-y-1">
+                  <span className="font-bold text-indigo-800 block">
+                    🎮 Menu Bermain ({generatedTheme.bermain.simulation?.title}):
+                  </span>
+                  <p className="text-slate-700 leading-relaxed">
+                    {generatedTheme.bermain.games[0]?.prompt}
+                  </p>
+                </div>
                 <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl text-xs space-y-1">
-                  <span className="font-bold text-amber-800">
-                    Soal 1 ({generatedTheme.berlatih.questions[0]?.dimension}):
+                  <span className="font-bold text-amber-800 block">
+                    ✍️ Menu Berlatih Soal 1 ({generatedTheme.berlatih.questions[0]?.dimension}):
                   </span>
                   <p className="text-slate-700 italic">
                     "{generatedTheme.berlatih.questions[0]?.caseStory}"
@@ -441,15 +484,17 @@ export const ThemeGeneratorModal: React.FC<ThemeGeneratorModalProps> = ({
                   </p>
                 </div>
               </div>
-              {errorMsg && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-                  <span>{errorMsg}</span>
-                </div>
-              )}
             </div>
           )}
         </div>
+
+        {/* Sticky Error Banner (always visible above footer even when scrolled) */}
+        {generatedTheme && errorMsg && (
+          <div className="mx-4 mb-2 p-3 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-800 flex items-start gap-2 shrink-0">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+            <span className="font-medium leading-relaxed">{errorMsg}</span>
+          </div>
+        )}
 
         {/* Modal Footer */}
         <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap shrink-0">
@@ -461,6 +506,7 @@ export const ThemeGeneratorModal: React.FC<ThemeGeneratorModalProps> = ({
                   disabled={isSavingCloud}
                   onClick={() => {
                     sound.playClick();
+                    setErrorMsg('');
                     setGeneratedTheme(null);
                   }}
                   className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition flex items-center gap-1.5 disabled:opacity-60"

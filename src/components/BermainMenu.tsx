@@ -190,17 +190,27 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
   // Deterministic shuffled options for matching dropdown so options aren't aligned 1-to-1
   const shuffledMatchingOptions = useMemo(() => {
     if (currentGame?.type !== 'matching') return [];
-    const texts = currentGame.pairs.map((p) => p.rightText);
+    const pairs = Array.isArray(currentGame.pairs) ? currentGame.pairs : [];
+    const texts = pairs.map((p) => p.rightText);
     if (texts.length <= 1) return texts;
     const rotated = [...texts.slice(1), texts[0]];
     return rotated;
   }, [currentGame, theme?.id]);
 
-  // When game switches to a reorder type, sync items
+  // When game switches to a reorder type, sync items and ensure they are not already in solved order
   useEffect(() => {
     if (currentGame?.type === 'reorder') {
-      const reorderQ = currentGame as { items: ReorderItem[] };
-      setReorderedItems([...reorderQ.items]);
+      const reorderQ = currentGame as { items: ReorderItem[]; correctOrder?: string[] };
+      const items = Array.isArray(reorderQ.items) ? [...reorderQ.items] : [];
+      const correctOrder = Array.isArray(reorderQ.correctOrder) ? reorderQ.correctOrder : [];
+      if (
+        items.length > 1 &&
+        correctOrder.length === items.length &&
+        correctOrder.every((id, idx) => id === items[idx]?.id)
+      ) {
+        items.push(items.shift()!);
+      }
+      setReorderedItems(items);
     }
   }, [currentGameIndex, currentGame]);
 

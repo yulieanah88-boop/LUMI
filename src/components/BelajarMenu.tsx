@@ -34,6 +34,8 @@ import { SpeechButton } from './SpeechButton';
 import { AdultGuideModal } from './AdultGuideModal';
 import { SafetyHelpModal } from './SafetyHelpModal';
 import { VideoCustomizerModal } from './VideoCustomizerModal';
+import { ChapterIllustration } from './ChapterIllustration';
+import { resolveRelevantIllustration } from '../data/themeIllustrations';
 
 function parseVideoEmbed(url: string) {
   if (!url) return null;
@@ -129,8 +131,8 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
           title: 'Video Edukasi IPAS: Perkembangan Teknologi Dahulu vs Sekarang',
         }
       : {
-          url: 'https://www.youtube.com/watch?v=kYv9Nkj2XqE',
-          title: 'Video Pembelajaran Kurikulum Merdeka',
+          url: '',
+          title: `Video Pembelajaran: ${theme?.judulTema || 'Kurikulum Merdeka'}`,
         };
 
   // Custom video URL state (persisted per theme in localStorage)
@@ -644,19 +646,29 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
 
                   {/* Visual Illustration Card */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-4">
-                    <div className="bg-gradient-to-br from-rose-100 via-pink-100 to-amber-100 rounded-2xl p-4 flex flex-col items-center justify-center text-center border border-rose-200 min-h-[160px]">
-                      <div className="space-y-2">
-                        <div className="text-4xl">
-                          {item.imageEmoji || '📖 💡'}
-                        </div>
-                        <span className="text-xs font-bold text-rose-800 block">
-                          {item.title}
-                        </span>
-                        <span className="text-[11px] text-slate-600 italic">
-                          {item.imageCaption}
-                        </span>
-                      </div>
-                    </div>
+                    {(() => {
+                      const promptVisual = resolveRelevantIllustration({
+                        explicitImageUrl: (item as { imageUrl?: string }).imageUrl,
+                        explicitImageAlt: (item as { imageAlt?: string }).imageAlt,
+                        explicitCaption: item.imageCaption,
+                        themeId: theme?.id,
+                        themeTitle: theme?.judulTema,
+                        subject: theme?.mataPelajaran,
+                        chapterId: `pemantik-${item.id}`,
+                        chapterTitle: item.title,
+                        chapterSummary: item.scenario,
+                        chapterIndex: item.id - 1,
+                      });
+                      return (
+                        <ChapterIllustration
+                          imageUrl={promptVisual.imageUrl}
+                          imageAlt={promptVisual.imageAlt}
+                          caption={promptVisual.caption}
+                          visualScene={promptVisual.visualScene}
+                          compact
+                        />
+                      );
+                    })()}
 
                     <div className="md:col-span-2 flex flex-col justify-center bg-slate-50 p-4 rounded-2xl border border-slate-200/70">
                       <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
@@ -774,7 +786,7 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
                         variant="primary"
                       />
                       <span className="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full hidden sm:inline-block">
-                        IPAS Kelas 3 SD Fase B
+                        {theme?.mataPelajaran || 'IPAS'} • {theme?.kelas || 'Kelas 3 SD'} ({theme?.fase || 'Fase B'})
                       </span>
                     </div>
                   </div>
@@ -791,6 +803,40 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
                       variant="secondary"
                     />
                   </div>
+
+                  {/* Visual Illustration for Materi & Bergambar */}
+                  {(() => {
+                    const currentIdx = Math.max(0, materiList.findIndex((m) => m.id === current.id));
+                    const chapterTyped = current as {
+                      imageUrl?: string;
+                      imageAlt?: string;
+                      imageCaption?: string;
+                      visualScene?: import('../types/theme').ThemeVisualScene;
+                    };
+                    const resolved = resolveRelevantIllustration({
+                      explicitImageUrl: chapterTyped.imageUrl,
+                      explicitImageAlt: chapterTyped.imageAlt,
+                      explicitCaption: chapterTyped.imageCaption,
+                      explicitVisualScene: chapterTyped.visualScene,
+                      themeId: theme?.id,
+                      themeTitle: theme?.judulTema,
+                      subject: theme?.mataPelajaran,
+                      chapterId: current.id,
+                      chapterTitle: current.title,
+                      chapterSummary: current.summary,
+                      chapterPoints: current.points,
+                      chapterIndex: currentIdx,
+                    });
+                    return (
+                      <ChapterIllustration
+                        imageUrl={resolved.imageUrl}
+                        imageAlt={resolved.imageAlt}
+                        caption={resolved.caption}
+                        visualScene={resolved.visualScene}
+                        points={current.points}
+                      />
+                    );
+                  })()}
 
                   {/* 3 Waktu Cards: Dahulu, Kini, Nanti with Individual Audio Buttons */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
@@ -810,7 +856,11 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
                           <div>
                             <div className="flex items-center justify-between gap-1.5 font-bold text-sm text-slate-800 font-display mb-1.5">
                               <div className="flex items-center gap-1.5">
-                                <Clock className="w-4 h-4 text-slate-600" />
+                                {(pt as { emoji?: string }).emoji ? (
+                                  <span className="text-base">{(pt as { emoji?: string }).emoji}</span>
+                                ) : (
+                                  <Clock className="w-4 h-4 text-slate-600" />
+                                )}
                                 <span>{pt.title}</span>
                               </div>
                               <SpeechButton
@@ -845,15 +895,15 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                          Tabel Perbandingan Periode Waktu:
+                          {theme?.id === 'dahulu_kini_nanti' ? 'Tabel Perbandingan Periode Waktu:' : 'Tabel Ringkasan Materi:'}
                         </span>
                         <SpeechButton
                           id={`table-${current.id}`}
                           textToSpeak={
-                            `Tabel perbandingan ${current.title}. ` +
+                            `Tabel ringkasan ${current.title}. ` +
                             current.tableData
                               .map(
-                                (r) => `Periode ${r.price}: contoh peralatan ${r.qty}, ciri kelebihan: ${r.label}`
+                                (r) => `${r.price}: ${r.qty}, keterangan: ${r.label}`
                               )
                               .join('. ')
                           }
@@ -866,9 +916,9 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
                         <table className="w-full text-left text-xs">
                           <thead className="bg-slate-100 text-slate-700 font-bold">
                             <tr>
-                              <th className="p-3">Periode Waktu</th>
-                              <th className="p-3">Contoh Peralatan</th>
-                              <th className="p-3">Ciri &amp; Kelebihan</th>
+                              <th className="p-3">{theme?.id === 'dahulu_kini_nanti' ? 'Periode Waktu' : 'Aspek / Kategori'}</th>
+                              <th className="p-3">{theme?.id === 'dahulu_kini_nanti' ? 'Contoh Peralatan' : 'Poin / Contoh'}</th>
+                              <th className="p-3">{theme?.id === 'dahulu_kini_nanti' ? 'Ciri & Kelebihan' : 'Penjelasan'}</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 bg-white">
@@ -913,7 +963,7 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
                     <h3 className="text-xl sm:text-2xl font-bold text-slate-800 font-display mt-0.5">
                       {videoMode === 'video' && parsedVideo
                         ? (videoSummary?.title || `Video Pembelajaran: ${theme?.judulTema || ''}`)
-                        : (videoSummary?.title || 'Petualangan Menjelajahi Masa: Dahulu, Kini, & Nanti')}
+                        : (videoSummary?.title || `Teater Pembelajaran: ${theme?.judulTema || 'Dahulu, Kini, & Nanti'}`)}
                     </h3>
                   </div>
 

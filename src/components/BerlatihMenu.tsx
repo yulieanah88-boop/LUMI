@@ -381,11 +381,11 @@ export const BerlatihMenu: React.FC<BerlatihMenuProps> = ({
             <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto pt-2 text-xs">
               <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
                 <span className="text-slate-500 block">Benar</span>
-                <span className="text-lg font-bold text-emerald-700">{Math.round((finalScore / 100) * 10)} Soal</span>
+                <span className="text-lg font-bold text-emerald-700">{Math.round((finalScore / 100) * questions.length)} Soal</span>
               </div>
               <div className="p-3 bg-rose-50 rounded-xl border border-rose-200">
                 <span className="text-slate-500 block">Perlu Perbaikan</span>
-                <span className="text-lg font-bold text-rose-700">{10 - Math.round((finalScore / 100) * 10)} Soal</span>
+                <span className="text-lg font-bold text-rose-700">{Math.max(0, questions.length - Math.round((finalScore / 100) * questions.length))} Soal</span>
               </div>
             </div>
 
@@ -495,7 +495,7 @@ export const BerlatihMenu: React.FC<BerlatihMenuProps> = ({
                         )}
                       </div>
                       <h3 className="font-bold text-slate-800 text-sm sm:text-base mt-0.5">
-                        Soal Asesmen HOTS #{currentIdx + 1} dari 10
+                        Soal Asesmen HOTS #{currentIdx + 1} dari {questions.length}
                       </h3>
                     </div>
                   </div>
@@ -924,7 +924,7 @@ export const BerlatihMenu: React.FC<BerlatihMenuProps> = ({
               <p className="text-xs text-slate-600 mt-1">
                 Kamu baru menjawab{' '}
                 <span className="font-bold text-emerald-700">
-                  {Object.keys(selectedAnswers).length} dari 10 soal
+                  {Object.keys(selectedAnswers).length} dari {questions.length} soal
                 </span>
                 . Apakah kamu yakin ingin mengakhiri asesmen sekarang?
               </p>
@@ -950,8 +950,8 @@ export const BerlatihMenu: React.FC<BerlatihMenuProps> = ({
 
       {/* Footer */}
       <footer className="max-w-5xl w-full mx-auto pt-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 border-t border-slate-200">
-        <span>MPI Lumi IPAS SD Kelas 3 • Menu Berlatih HOTS dengan Timer Cerdas</span>
-        <span>Asesmen Kompetensi Kurikulum Merdeka Fase B</span>
+        <span>MPI Lumi • {theme?.judulTema || 'IPAS SD Kelas 3'} ({theme?.kelas || 'Kelas 3 SD'}) • Menu Berlatih HOTS</span>
+        <span>Asesmen Kompetensi Kurikulum Merdeka {theme?.fase || 'Fase B'}</span>
       </footer>
     </div>
   );

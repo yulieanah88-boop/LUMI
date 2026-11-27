@@ -18,9 +18,31 @@ export interface ThemeLearningPrompt {
   scenario: string;
   imageCaption: string;
   imageEmoji: string;
+  imageUrl?: string;
+  imageAlt?: string;
   question: string;
   options: { text: string; feedback: string }[];
   narasiText?: string;
+}
+
+export type VisualSceneCategory =
+  | 'transport_tech'
+  | 'communication'
+  | 'home_tradition'
+  | 'body_safety'
+  | 'nature_ecosystem'
+  | 'space_planet'
+  | 'water_weather'
+  | 'science_energy'
+  | 'civics_culture'
+  | 'math_general';
+
+export interface ThemeVisualScene {
+  sceneCategory: VisualSceneCategory;
+  sceneTitle: string;
+  mainIcon: string;
+  subIcons: string[];
+  caption: string;
 }
 
 export interface ThemeLearningChapter {
@@ -29,6 +51,10 @@ export interface ThemeLearningChapter {
   badge: string;
   summary: string;
   narasiText: string;
+  imageUrl?: string;
+  imageAlt?: string;
+  imageCaption?: string;
+  visualScene?: ThemeVisualScene;
   points: {
     title: string;
     desc: string;

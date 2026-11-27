@@ -4,6 +4,36 @@ import { HOTS_QUESTIONS } from '../hotsQuestions';
 import { ACHIEVEMENT_BADGES } from '../achievementBadges';
 import { SUMBER_BELAJAR, GLOSARIUM_EKONOMI } from '../appData';
 import { TUJUAN_PEMBELAJARAN, CAPAIAN_PEMBELAJARAN, PERTANYAAN_PEMANTIK, MATERI_BAB } from '../learningContent';
+import { BUILTIN_ILLUSTRATIONS } from '../themeIllustrations';
+
+const PEMANTIK_IMAGE_MAP: Record<number, { imageUrl: string; imageAlt: string }> = {
+  1: {
+    imageUrl: BUILTIN_ILLUSTRATIONS.komunikasi,
+    imageAlt: 'Ilustrasi perubahan alat komunikasi dari surat pos dan kentongan ke panggilan video dan hologram',
+  },
+  2: {
+    imageUrl: BUILTIN_ILLUSTRATIONS.rumahPermainan,
+    imageAlt: 'Ilustrasi setrika arang, lampu minyak, dan permainan tradisional zaman dahulu hingga rumah modern',
+  },
+};
+
+const MATERI_IMAGE_MAP: Record<string, { imageUrl: string; imageAlt: string; imageCaption: string }> = {
+  transportasi: {
+    imageUrl: BUILTIN_ILLUSTRATIONS.transportasi,
+    imageAlt: 'Ilustrasi perkembangan transportasi: delman kuda, mobil listrik & kereta cepat, hingga mobil tenaga surya',
+    imageCaption: 'Perjalanan alat transportasi: Delman tradisional (Dahulu), Mobil Listrik & Kereta Cepat (Kini), dan Mobil Tenaga Surya Masa Depan (Nanti).',
+  },
+  komunikasi: {
+    imageUrl: BUILTIN_ILLUSTRATIONS.komunikasi,
+    imageAlt: 'Ilustrasi perkembangan komunikasi: kentongan & surat pos, panggilan video tablet, hingga hologram 3D',
+    imageCaption: 'Evolusi cara manusia bertukar kabar: Kentongan & Surat Pos (Dahulu), Panggilan Video Cepat (Kini), hingga Hologram 3D (Nanti).',
+  },
+  permainan: {
+    imageUrl: BUILTIN_ILLUSTRATIONS.rumahPermainan,
+    imageAlt: 'Ilustrasi peralatan rumah dan permainan anak: lampu teplok, setrika arang, congklak, egrang, dan taman bermain modern',
+    imageCaption: 'Kehidupan rumah dan permainan anak: Lampu teplok, setrika arang, congklak & egrang (Dahulu) hingga rumah terang LED & bermain ceria bersama teman.',
+  },
+};
 
 export const DAHULU_KINI_NANTI_THEME: ThemeConfig = {
   id: 'dahulu_kini_nanti',
@@ -32,10 +62,15 @@ export const DAHULU_KINI_NANTI_THEME: ThemeConfig = {
     pertanyaanPemantik: PERTANYAAN_PEMANTIK.map((p) => ({
       ...p,
       imageEmoji: p.id === 1 ? '📜 📱' : '🪵 ⚡',
+      imageUrl: PEMANTIK_IMAGE_MAP[p.id]?.imageUrl,
+      imageAlt: PEMANTIK_IMAGE_MAP[p.id]?.imageAlt,
       narasiText: `${p.title}. ${p.scenario} ${p.question}`,
     })),
     materiBab: MATERI_BAB.map((m) => ({
       ...m,
+      imageUrl: MATERI_IMAGE_MAP[m.id]?.imageUrl,
+      imageAlt: MATERI_IMAGE_MAP[m.id]?.imageAlt,
+      imageCaption: MATERI_IMAGE_MAP[m.id]?.imageCaption,
       narasiText: `${m.title}. ${m.summary} ${m.points.map((pt) => `${pt.title}: ${pt.desc}`).join(' ')}`,
     })),
     videoSummary: {

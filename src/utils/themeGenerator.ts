@@ -729,52 +729,31 @@ export function generateFallbackTheme(input: ThemeGeneratorInput): ThemeConfig {
 }
 
 export async function generateThemeWithAI(input: ThemeGeneratorInput): Promise<ThemeConfig> {
-  try {
-    const res = await fetch('/api/generate-theme', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    });
+  const res = await fetch('/api/generate-theme', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.theme) {
-        const validation = validateTheme(data.theme);
-        if (validation.valid) {
-          return data.theme;
-        } else {
-          console.warn('AI generated theme has validation issues, filling missing fields:', validation.errors);
-          // If questions are missing or incomplete, merge with fallback questions
-          const fallback = generateFallbackTheme(input);
-          const mergedTheme = {
-            ...fallback,
-            ...data.theme,
-            berlatih: {
-              questions:
-                Array.isArray(data.theme?.berlatih?.questions) && data.theme.berlatih.questions.length === 10
-                  ? data.theme.berlatih.questions
-                  : fallback.berlatih.questions,
-            },
-            bermain: {
-              ...fallback.bermain,
-              ...(data.theme?.bermain || {}),
-              games:
-                Array.isArray(data.theme?.bermain?.games) && data.theme.bermain.games.length >= 5
-                  ? data.theme.bermain.games
-                  : fallback.bermain.games,
-            },
-            badges: Array.isArray(data.theme?.badges) && data.theme.badges.length === 5 ? data.theme.badges : fallback.badges,
-          };
-          return mergedTheme;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Server AI generation failed or offline, using fallback generator:', err);
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    throw new Error(
+      data?.error ||
+        `Server gagal menghasilkan tema (HTTP ${res.status}). Silakan coba lagi sebentar.`
+    );
   }
 
-  // Graceful, high-quality fallback generator
-  return generateFallbackTheme(input);
+  if (!data || !data.theme) {
+    throw new Error('Respons AI tidak mengandung data tema yang lengkap. Silakan coba lagi.');
+  }
+
+  const validation = validateTheme(data.theme);
+  if (!validation.valid) {
+    throw new Error(`Struktur tema AI belum lengkap: ${validation.errors.join(' ')}`);
+  }
+
+  return data.theme;
 }

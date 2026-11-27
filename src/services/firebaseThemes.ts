@@ -51,20 +51,39 @@ export function normalizeThemeId(rawId: string): string {
   return cleaned || `custom_${Date.now()}`;
 }
 
+function asString(val: unknown, fallback = ''): string {
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+  return fallback;
+}
+
+function isPlainObject(val: unknown): val is Record<string, unknown> {
+  return val !== null && typeof val === 'object' && !Array.isArray(val);
+}
+
 export function sanitizeThemeForFirestore(theme: ThemeConfig, user: User) {
-  const cleanId = normalizeThemeId(theme.id || `custom_${Date.now()}`);
+  const cleanId = normalizeThemeId(asString(theme.id) || `custom_${Date.now()}`);
+  const safeJudul = (asString(theme.judulTema).trim() || 'Tema Pembelajaran').slice(0, 200);
+
+  const rawTujuan = Array.isArray(theme.tujuanPembelajaran)
+    ? theme.tujuanPembelajaran.filter(isPlainObject)
+    : [];
   const safeTujuan =
-    Array.isArray(theme.tujuanPembelajaran) && theme.tujuanPembelajaran.length > 0
-      ? theme.tujuanPembelajaran.slice(0, 12)
-      : [{ id: 1, text: `Memahami materi ${theme.judulTema}`.slice(0, 200), icon: '🎯' }];
+    rawTujuan.length > 0
+      ? rawTujuan.slice(0, 12)
+      : [{ id: 1, text: `Memahami materi ${safeJudul}`.slice(0, 200), icon: '🎯' }];
+
+  const rawBadges = Array.isArray(theme.badges)
+    ? theme.badges.filter(isPlainObject)
+    : [];
   const safeBadges =
-    Array.isArray(theme.badges) && theme.badges.length > 0
-      ? theme.badges.slice(0, 10)
+    rawBadges.length > 0
+      ? rawBadges.slice(0, 10)
       : [
           {
             id: `badge_${cleanId}_1`,
             section: 'belajar',
-            title: `Penjelajah ${theme.judulTema}`.slice(0, 60),
+            title: `Penjelajah ${safeJudul}`.slice(0, 60),
             nickname: 'Pembelajar Tangguh',
             icon: '📖',
             color: 'from-emerald-500 to-teal-500',
@@ -77,33 +96,33 @@ export function sanitizeThemeForFirestore(theme: ThemeConfig, user: User) {
         ];
 
   const updatableFields = {
-    judulTema: ((theme.judulTema || '').trim() || 'Tema Pembelajaran').slice(0, 200),
-    subJudul: (theme.subJudul || '').trim().slice(0, 300),
-    mataPelajaran: ((theme.mataPelajaran || '').trim() || 'IPAS').slice(0, 150),
-    fase: ((theme.fase || '').trim() || 'Fase B').slice(0, 60),
-    kelas: ((theme.kelas || '').trim() || 'Kelas 3 SD').slice(0, 100),
-    emojiMaskot: ((theme.emojiMaskot || '').trim() || '🌟').slice(0, 16),
-    sapaanLumi: (theme.sapaanLumi || '').trim().slice(0, 1000),
-    deskripsiSingkat: (theme.deskripsiSingkat || '').trim().slice(0, 500),
-    capaianPembelajaran: (theme.capaianPembelajaran || '').trim().slice(0, 2000),
-    palet: stripUndefinedDeep(theme.palet && typeof theme.palet === 'object' ? theme.palet : {}),
-    tujuanPembelajaran: stripUndefinedDeep(safeTujuan.filter((x) => x && typeof x === 'object')),
-    belajar: stripUndefinedDeep(theme.belajar && typeof theme.belajar === 'object' ? theme.belajar : {}),
-    bermain: stripUndefinedDeep(theme.bermain && typeof theme.bermain === 'object' ? theme.bermain : {}),
-    berlatih: stripUndefinedDeep(theme.berlatih && typeof theme.berlatih === 'object' ? theme.berlatih : {}),
-    refleksi: stripUndefinedDeep(theme.refleksi && typeof theme.refleksi === 'object' ? theme.refleksi : {}),
+    judulTema: safeJudul,
+    subJudul: asString(theme.subJudul).trim().slice(0, 300),
+    mataPelajaran: (asString(theme.mataPelajaran).trim() || 'IPAS').slice(0, 150),
+    fase: (asString(theme.fase).trim() || 'Fase B').slice(0, 60),
+    kelas: (asString(theme.kelas).trim() || 'Kelas 3 SD').slice(0, 100),
+    emojiMaskot: (Array.from(asString(theme.emojiMaskot).trim() || '🌟').slice(0, 4).join('') || '🌟').slice(0, 16),
+    sapaanLumi: asString(theme.sapaanLumi).trim().slice(0, 1000),
+    deskripsiSingkat: asString(theme.deskripsiSingkat).trim().slice(0, 500),
+    capaianPembelajaran: asString(theme.capaianPembelajaran).trim().slice(0, 2000),
+    palet: stripUndefinedDeep(isPlainObject(theme.palet) ? theme.palet : {}),
+    tujuanPembelajaran: stripUndefinedDeep(safeTujuan),
+    belajar: stripUndefinedDeep(isPlainObject(theme.belajar) ? theme.belajar : {}),
+    bermain: stripUndefinedDeep(isPlainObject(theme.bermain) ? theme.bermain : {}),
+    berlatih: stripUndefinedDeep(isPlainObject(theme.berlatih) ? theme.berlatih : {}),
+    refleksi: stripUndefinedDeep(isPlainObject(theme.refleksi) ? theme.refleksi : {}),
     sumberBelajar: stripUndefinedDeep(
       (Array.isArray(theme.sumberBelajar) ? theme.sumberBelajar : [])
-        .filter((x) => x && typeof x === 'object')
+        .filter(isPlainObject)
         .slice(0, 20)
     ),
     glosarium: stripUndefinedDeep(
       (Array.isArray(theme.glosarium) ? theme.glosarium : [])
-        .filter((x) => x && typeof x === 'object')
+        .filter(isPlainObject)
         .slice(0, 50)
     ),
-    sertifikat: stripUndefinedDeep(theme.sertifikat && typeof theme.sertifikat === 'object' ? theme.sertifikat : {}),
-    badges: stripUndefinedDeep(safeBadges.filter((x) => x && typeof x === 'object')),
+    sertifikat: stripUndefinedDeep(isPlainObject(theme.sertifikat) ? theme.sertifikat : {}),
+    badges: stripUndefinedDeep(safeBadges),
     updatedAt: serverTimestamp(),
   };
 
@@ -113,7 +132,7 @@ export function sanitizeThemeForFirestore(theme: ThemeConfig, user: User) {
     isCustom: true,
     isPublished: true,
     creatorUid: user.uid,
-    creatorName: (user.displayName || 'Guru MPI Lumi').trim().slice(0, 120),
+    creatorName: (asString(user.displayName).trim() || 'Guru MPI Lumi').slice(0, 120),
     createdAt: serverTimestamp(),
   };
 
@@ -135,20 +154,20 @@ export async function signOutGoogle(): Promise<void> {
 export async function saveCustomThemeToFirestore(
   theme: ThemeConfig,
   user: User,
-  options?: { skipIfExists?: boolean }
+  options?: { skipIfExists?: boolean; forceCreate?: boolean }
 ): Promise<ThemeConfig> {
   const { cleanId, payload, updatableFields } = sanitizeThemeForFirestore(theme, user);
   const path = `${CUSTOM_THEMES_COLLECTION}/${cleanId}`;
   const docRef = doc(db, CUSTOM_THEMES_COLLECTION, cleanId);
 
   let alreadyExists = false;
-  try {
-    const existingSnap = await getDoc(docRef);
-    alreadyExists = existingSnap.exists();
-  } catch {
-    // Doc might not exist or might be an unpublished doc owned by someone else;
-    // proceed to create attempt below.
-    alreadyExists = false;
+  if (!options?.forceCreate) {
+    try {
+      const existingSnap = await getDoc(docRef);
+      alreadyExists = existingSnap.exists();
+    } catch {
+      alreadyExists = false;
+    }
   }
 
   if (alreadyExists) {
@@ -194,6 +213,26 @@ export async function saveCustomThemeToFirestore(
     markThemeSyncedToCloud(cleanId);
     return savedTheme;
   } catch (error) {
+    // If document already existed (e.g., retry with forceCreate), try updating if owned by user
+    try {
+      const checkSnap = await getDoc(docRef);
+      if (checkSnap.exists() && checkSnap.data()?.creatorUid === user.uid) {
+        await updateDoc(docRef, updatableFields);
+        const updatedTheme: ThemeConfig = {
+          ...theme,
+          id: cleanId,
+          isCustom: true,
+          isPublished: true,
+          creatorUid: user.uid,
+          creatorName: payload.creatorName,
+        };
+        saveCustomTheme(updatedTheme);
+        markThemeSyncedToCloud(cleanId);
+        return updatedTheme;
+      }
+    } catch {
+      // Fall through to structured error reporting below
+    }
     handleFirestoreError(error, OperationType.CREATE, path);
   }
 }

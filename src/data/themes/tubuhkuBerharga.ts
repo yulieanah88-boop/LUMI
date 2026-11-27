@@ -1,4 +1,5 @@
 import { ThemeConfig } from '../../types';
+import { BUILTIN_ILLUSTRATIONS } from '../themeIllustrations';
 
 export const TUBUHKU_BERHARGA_THEME: ThemeConfig = {
   id: 'tubuhku_berharga',
@@ -64,6 +65,8 @@ export const TUBUHKU_BERHARGA_THEME: ThemeConfig = {
           'Saat pergi berenang bersama keluarga, Rani dan Dimas mengenakan pakaian renang. Guru PJOK menjelaskan bahwa area tubuh yang tertutup pakaian renang adalah bagian tubuh pribadi kita yang sangat istimewa dan tidak boleh dilihat atau disentuh sembarangan oleh orang lain.',
         imageCaption: 'Pakaian renang menutup area tubuh pribadi yang harus dijaga privasinya.',
         imageEmoji: '🩱 🩳',
+        imageUrl: BUILTIN_ILLUSTRATIONS.tubuhkuPrivasi,
+        imageAlt: 'Ilustrasi dua siswa menjaga privasi tubuh dan kebersihan diri dengan perisai pelindung hijau',
         question: 'Mengapa tubuh kita memiliki bagian pribadi yang harus kita jaga dan tutupi dengan sopan?',
         options: [
           {
@@ -89,6 +92,8 @@ export const TUBUHKU_BERHARGA_THEME: ThemeConfig = {
           'Kakak mengajak adik merahasiakan rencana membeli kue ulang tahun kejutan untuk Ibu sore nanti. Sementara di cerita lain, ada anak yang diminta seseorang menyimpan rahasia yang membuatnya merasa cemas, takut, dan jantungnya berdebar kencang.',
         imageCaption: 'Membedakan rahasia kejutan yang membahagiakan dengan rahasia yang membuat cemas.',
         imageEmoji: '🎂 🤫',
+        imageUrl: BUILTIN_ILLUSTRATIONS.lampuSentuhan,
+        imageAlt: 'Ilustrasi lampu lalu lintas sentuhan dan keberanian bercerita kepada guru atau ibu',
         question: 'Bagaimana cara membedakan rahasia yang baik dengan rahasia yang tidak boleh disimpan?',
         options: [
           {
@@ -117,6 +122,9 @@ export const TUBUHKU_BERHARGA_THEME: ThemeConfig = {
           'Tubuh kita adalah anugerah terindah. Kita memiliki hak untuk menjaga dan merawatnya. Ada bagian tubuh luar yang terbuka (seperti tangan dan wajah), dan ada bagian tubuh pribadi yang wajib tertutup.',
         narasiText:
           'Bab 1: Tubuhku Milikku dan Bagian Pribadi. Tubuhmu adalah milikmu. Bagian tubuh pribadi adalah area yang tertutup pakaian dalam: dada, area antara paha, pantat, dan mulut. Tidak boleh disentuh sembarangan.',
+        imageUrl: BUILTIN_ILLUSTRATIONS.tubuhkuPrivasi,
+        imageAlt: 'Ilustrasi menjaga hak privasi tubuhku yang berharga dan kebiasaan bersih',
+        imageCaption: 'Tubuhku adalah milikku seutuhnya: mari jaga privasi bagian tubuh pribadi dengan sikap percaya diri dan sopan.',
         points: [
           {
             title: 'Tubuhku adalah Milikku Seutuhnya 🌟',
@@ -148,6 +156,9 @@ export const TUBUHKU_BERHARGA_THEME: ThemeConfig = {
           'Menjaga tubuh tetap bersih adalah cara kita bersyukur. Selain itu, kita juga harus menghormati privasi diri sendiri dan privasi orang lain di sekitar kita.',
         narasiText:
           'Bab 2: Merawat Kebersihan dan Menghormati Privasi. Mandi dua kali sehari, mengganti pakaian dalam bersih setiap hari, dan cuci tangan setelah buang air. Selalu ketuk pintu sebelum masuk kamar orang lain.',
+        imageUrl: BUILTIN_ILLUSTRATIONS.tubuhkuPrivasi,
+        imageAlt: 'Ilustrasi merawat kebersihan diri dengan sabun, handuk bersih, sikat gigi, serta etika mengetuk pintu',
+        imageCaption: 'Kebiasaan sehat sehari-hari: mandi pakai sabun, memakai handuk serta pakaian bersih, dan mengetuk pintu untuk menjaga privasi.',
         points: [
           {
             title: 'Kebiasaan Bersih Setiap Hari 🧼',
@@ -179,6 +190,9 @@ export const TUBUHKU_BERHARGA_THEME: ThemeConfig = {
           'Kita bisa mengenali sentuhan dengan menganalogikan Lampu Lalu Lintas: Lampu Hijau (Aman), Lampu Kuning (Membingungkan), dan Lampu Merah (Tidak Aman). Jika merasa tidak aman, gunakan jurus: Tolak, Pergi, Ceritakan!',
         narasiText:
           'Bab 3: Tiga Jenis Sentuhan dan Jurus Tiga Langkah. Sentuhan hijau itu aman dan penuh kasih sayang. Sentuhan kuning membingungkan dan membuat risih. Sentuhan merah tidak aman karena menyentuh area pribadi. Jika tidak nyaman, gunakan jurus: Tolak, Pergi, Ceritakan! Ingat, itu bukan salahmu.',
+        imageUrl: BUILTIN_ILLUSTRATIONS.lampuSentuhan,
+        imageAlt: 'Ilustrasi lampu lalu lintas sentuhan aman (hijau), ragu (kuning), dan bahaya (merah) serta langkah menuju orang dewasa tepercaya',
+        imageCaption: 'Lampu Lalu Lintas Sentuhan: kenali sentuhan aman (Hijau), waspadai yang membuat ragu/risih, dan berani Tolak, Pergi, lalu Ceritakan ke orang tua atau guru.',
         points: [
           {
             title: 'Sentuhan Hijau (Aman & Nyaman) 🟢',

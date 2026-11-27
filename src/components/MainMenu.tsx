@@ -379,7 +379,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">
               <LoveMenuCard
                 title="Menu Belajar"
-                subtitle="Tujuan, Pertanyaan Pemantik Bergambar, Cerita Waktu (Dahulu, Kini, Nanti), &amp; Video Animasi."
+                subtitle={`Tujuan, Pemantik Bergambar, ${theme?.belajar?.materiBab?.length || 3} Bab Materi (${theme?.judulTema || 'Interaktif'}), & Teater Animasi.`}
                 icon={BookOpen}
                 emoji="📖"
                 themeColor="rose"
@@ -389,21 +389,21 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
               <LoveMenuCard
                 title="Menu Bermain"
-                subtitle="Mesin Waktu Interaktif &amp; Game 5 Format (PG, PG Kompleks, Menjodohkan, Isian, Reorder)."
+                subtitle={`${theme?.bermain?.simulation?.title || 'Simulasi Interaktif'} & Game ${theme?.bermain?.games?.length || 5} Format (PG, Kompleks, Jodohkan, Isian, Urutkan).`}
                 icon={Gamepad2}
                 emoji="🎮"
                 themeColor="amber"
-                badge={progress.bermain ? '✓ Selesai' : 'Mesin Waktu + Game'}
+                badge={progress.bermain ? '✓ Selesai' : 'Simulasi + Game'}
                 onClick={() => onNavigate('bermain')}
               />
 
               <LoveMenuCard
                 title="Menu Berlatih"
-                subtitle="10 Soal Asesmen HOTS ramah anak Kelas 3 SD berbasis cerita masa lalu hingga masa depan."
+                subtitle={`${theme?.berlatih?.questions?.length || 10} Soal Asesmen HOTS ramah anak (${theme?.kelas || 'SD'}) berbasis studi kasus ${theme?.judulTema || 'pembelajaran'}.`}
                 icon={PenTool}
                 emoji="✍️"
                 themeColor="emerald"
-                badge={completedHots ? `✓ Skor: ${hotsScore}` : '10 Soal HOTS'}
+                badge={completedHots ? `✓ Skor: ${hotsScore}` : `${theme?.berlatih?.questions?.length || 10} Soal HOTS`}
                 onClick={() => onNavigate('berlatih')}
               />
             </div>
@@ -418,7 +418,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">
               <LoveMenuCard
                 title="Menu Refleksi"
-                subtitle="Refleksi emosi belajar dengan emoji ceria &amp; rasa syukur atas kemajuan teknologi."
+                subtitle={`Refleksi emosi belajar dengan emoji ceria & komitmen sikap positif tentang ${theme?.judulTema || 'tema ini'}.`}
                 icon={Smile}
                 emoji="🤔"
                 themeColor="sky"
@@ -428,7 +428,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
               <LoveMenuCard
                 title="Menu Sumber Belajar"
-                subtitle="Buku IPAS Kelas 3 Kemendikbudristek, Modul Fase B, &amp; Ensiklopedia Benda."
+                subtitle={`Referensi Kurikulum Merdeka (${theme?.mataPelajaran || 'IPAS'} ${theme?.fase || 'Fase B'}) & Glosarium ${theme?.judulTema || 'Pembelajaran'}.`}
                 icon={Library}
                 emoji="📚"
                 themeColor="violet"
@@ -438,7 +438,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
               <LoveMenuCard
                 title="Menu Pengembang"
-                subtitle="Profil lengkap guru pengembang (Foto, Nama, Instansi SD, Mapel IPAS 3, Surel, &amp; Tahun)."
+                subtitle="Profil lengkap guru pengembang (Foto, Nama, Instansi SD, Mata Pelajaran, Surel, & Tahun)."
                 icon={UserCheck}
                 emoji="👩‍🏫"
                 themeColor="fuchsia"
@@ -472,7 +472,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
       {/* Footer */}
       <footer className="w-full max-w-6xl mx-auto text-center py-3 z-10 text-xs text-slate-600 mt-4 border-t border-rose-100">
-        <p>MPI IPAS Kelas III SD • Desain Menu Love Lumi • Materi Dahulu, Kini, dan Nanti</p>
+        <p>MPI {theme?.mataPelajaran || 'IPAS'} ({theme?.kelas || 'Kelas III SD'}) • Desain Menu Love Lumi • Tema {theme?.judulTema || 'Dahulu, Kini, dan Nanti'}</p>
       </footer>
 
       {/* QUICK PHOTO MODAL: Ubah/Upload Foto Profil dari Pojok Kiri Atas */}
