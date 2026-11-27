@@ -1,9 +1,14 @@
 import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
@@ -27,24 +32,33 @@ async function startServer() {
       });
     }
 
+    const effectiveSubject = (subject || 'IPAS').trim();
+    const effectiveGrade = (gradePhase || 'Fase B (Kelas 3 SD)').trim();
+    const detectedFase = /fase\s*c|kelas\s*[56]/i.test(effectiveGrade)
+      ? 'Fase C'
+      : /fase\s*a|kelas\s*[12]/i.test(effectiveGrade)
+      ? 'Fase A'
+      : 'Fase B';
+
     try {
       const ai = new GoogleGenAI({ apiKey });
 
-      const systemPrompt = `Kamu adalah Instructional Designer dan Ahli Kurikulum Merdeka Sekolah Dasar (Fase B / Kelas 3 SD) profesional.
+      const systemPrompt = `Kamu adalah Instructional Designer dan Ahli Kurikulum Merdeka Sekolah Dasar profesional.
 Tugasmu adalah menghasilkan data struktur tema pembelajaran interaktif lengkap untuk aplikasi "MPI Lumi".
 
 KRITERIA WAJIB:
-1. Target peserta didik: Usia 8-9 tahun (Kelas 3 SD Fase B). Bahasa Indonesia harus ramah anak, positif, mudah dipahami, ceria, dan memotivasi.
-2. DILARANG memuat konten kekerasan, SARA, atau pornografi.
-3. Struktur JSON yang dihasilkan HARUS LENGKAP dan valid sesuai format berikut:
+1. Target peserta didik: ${effectiveGrade} (${detectedFase}). Bahasa Indonesia harus ramah anak, positif, kontekstual dengan usia jenjang tersebut, ceria, dan memotivasi.
+2. Seluruh materi, simulasi, skenario kasus, 5 game, dan 10 soal HOTS HARUS 100% spesifik membahas topik "${topic.trim()}" — JANGAN menggunakan contoh atau konteks tema lain.
+3. DILARANG memuat konten kekerasan, SARA, atau pornografi.
+4. Struktur JSON yang dihasilkan HARUS LENGKAP dan valid sesuai format berikut:
 {
   "id": "custom_${Date.now()}",
   "judulTema": "${topic.trim()}",
-  "subJudul": "Sub judul tema yang menarik untuk anak SD",
-  "mataPelajaran": "${subject || 'IPAS'}",
-  "fase": "Fase B",
-  "kelas": "${gradePhase || 'Kelas III SD'}",
-  "emojiMaskot": "Emoji maskot 1 karakter (misal: 🌿 / 🌟 / 🚀)",
+  "subJudul": "Sub judul tema yang menarik dan sesuai topik",
+  "mataPelajaran": "${effectiveSubject}",
+  "fase": "${detectedFase}",
+  "kelas": "${effectiveGrade}",
+  "emojiMaskot": "Emoji maskot 1 karakter yang relevan dengan topik",
   "sapaanLumi": "Sapaan ramah anak dari Lumi tentang topik ini",
   "deskripsiSingkat": "Deskripsi 1-2 kalimat untuk kartu tema",
   "palet": {
@@ -64,7 +78,7 @@ KRITERIA WAJIB:
     { "id": 3, "text": "Tujuan pembelajaran 3 selaras CP", "icon": "🌟" },
     { "id": 4, "text": "Tujuan pembelajaran 4 selaras CP", "icon": "✨" }
   ],
-  "capaianPembelajaran": "Deskripsi capaian pembelajaran Fase B",
+  "capaianPembelajaran": "Deskripsi capaian pembelajaran ${detectedFase} (${effectiveGrade})",
   "belajar": {
     "pertanyaanPemantik": [
       {
@@ -145,9 +159,25 @@ KRITERIA WAJIB:
   "bermain": {
     "simulation": {
       "type": "custom_interactive",
-      "title": "Simulasi Eksplorasi Interaktif",
-      "badge": "Laboratorium Cilik",
-      "description": "Jelajahi dan amati berbagai skenario menarik tentang ${topic.trim()}."
+      "title": "Simulasi Studi Kasus: ${topic.trim()}",
+      "badge": "Laboratorium Eksplorasi",
+      "description": "Jelajahi dan selesaikan 4 studi kasus interaktif seputar topik ${topic.trim()}.",
+      "data": {
+        "scenarios": [
+          {
+            "id": 1,
+            "title": "Judul Skenario 1 spesifik topik",
+            "situation": "Deskripsi situasi nyata terkait ${topic.trim()} (2-3 kalimat).",
+            "icon": "🔍",
+            "options": [
+              { "text": "Tindakan atau jawaban yang tepat", "isCorrect": true, "feedback": "Penjelasan mengapa pilihan ini tepat." },
+              { "text": "Tindakan kurang tepat 1", "isCorrect": false, "feedback": "Penjelasan pembimbing mengapa kurang tepat." },
+              { "text": "Tindakan kurang tepat 2", "isCorrect": false, "feedback": "Penjelasan pembimbing mengapa kurang tepat." }
+            ]
+          }
+          // WAJIB 4 skenario studi kasus (id 1 sampai 4) yang relevan 100% dengan topik "${topic.trim()}"!
+        ]
+      }
     },
     "games": [
       {
@@ -228,11 +258,11 @@ KRITERIA WAJIB:
   },
   "sumberBelajar": [
     {
-      "title": "Buku Panduan Guru dan Siswa ${subject || 'IPAS'} Kelas 3 SD",
+      "title": "Buku Panduan Guru dan Siswa ${effectiveSubject} ${effectiveGrade}",
       "author": "Kementerian Pendidikan, Kebudayaan, Riset, dan Teknologi RI",
       "year": "2024",
       "type": "Buku Teks Kurikulum Merdeka",
-      "description": "Rujukan utama materi pembelajaran Fase B SD.",
+      "description": "Rujukan utama materi pembelajaran ${detectedFase} (${effectiveGrade}).",
       "link": "https://buku.kemdikbud.go.id"
     },
     {
@@ -251,7 +281,7 @@ KRITERIA WAJIB:
   "sertifikat": {
     "appreciationText": "Atas keberhasilan menuntaskan seluruh petualangan pembelajaran:",
     "themeTitleOnCert": "${topic.trim().toUpperCase()}",
-    "subText": "Materi ${subject || 'IPAS'} Kelas III SD Kurikulum Merdeka"
+    "subText": "Materi ${effectiveSubject} ${effectiveGrade} Kurikulum Merdeka"
   },
   "badges": [
     {
@@ -323,20 +353,26 @@ KRITERIA WAJIB:
 }
 
 PENTING:
-- Bagian berlatih.questions HARUS BERISI TEPAT 10 SOAL HOTS (id 1 sampai 10).
+- Bagian bermain.simulation.data.scenarios HARUS BERISI TEPAT 4 skenario studi kasus interaktif yang relevan langsung dengan "${topic.trim()}".
+- Bagian bermain.games HARUS BERISI 5 tantangan spesifik topik "${topic.trim()}" (mc, complex, matching, short, reorder) dengan posisi opsi benar yang bervariasi.
+- Bagian berlatih.questions HARUS BERISI TEPAT 10 SOAL HOTS (id 1 sampai 10) spesifik topik "${topic.trim()}".
 - Setiap soal wajib memiliki: id (angka 1-10), dimension ('Analisis (C4)' atau 'Evaluasi (C5)' atau 'Kreasi (C6)'), caseStory (cerita pendek kehidupan nyata anak 3-4 kalimat), question (pertanyaan analisis/evaluasi), options (array 4 pilihan kalimat lengkap), correctAnswer (angka index 0, 1, 2, atau 3), explanation (pembahasan detail 2-3 kalimat yang mendidik).
 - Keluarkan HANYA JSON murni tanpa markdown backticks (tanpa \`\`\`json) agar bisa di-parse langsung.`;
 
       const userPrompt = `Buatkan tema pembelajaran interaktif lengkap untuk:
 - Topik: "${topic.trim()}"
-- Mata Pelajaran: "${subject || 'IPAS'}"
-- Jenjang: "${gradePhase || 'Fase B (Kelas 3 SD)'}"
+- Mata Pelajaran: "${effectiveSubject}"
+- Jenjang: "${effectiveGrade}"
 ${goals ? `- Catatan Tujuan Khusus dari Guru: "${goals}"` : ''}
 
-Pastikan tepat ada 10 soal asesmen HOTS di dalam array berlatih.questions. Hasilkan HANYA JSON murni!`;
+Pastikan:
+1) 4 skenario simulasi pada bermain.simulation.data.scenarios benar-benar membahas kasus nyata topik "${topic.trim()}".
+2) 5 game pada bermain.games benar-benar menguji pemahaman topik "${topic.trim()}".
+3) Tepat 10 soal asesmen HOTS di dalam array berlatih.questions.
+Hasilkan HANYA JSON murni!`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-4-hydrogen',
         contents: [
           { role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] },
         ],
@@ -371,12 +407,19 @@ Pastikan tepat ada 10 soal asesmen HOTS di dalam array berlatih.questions. Hasil
     }
   });
 
-  // Mount Vite middleware in development mode
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'spa',
-  });
-  app.use(vite.middlewares);
+  if (process.env.NODE_ENV === 'production') {
+    const distPath = path.join(__dirname, 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  } else {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  }
 
   app.listen(port, '0.0.0.0', () => {
     console.log(`Server MPI Lumi ready at http://localhost:${port}`);

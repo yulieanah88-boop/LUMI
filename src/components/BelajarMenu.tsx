@@ -154,9 +154,60 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
     return 'animation';
   });
 
-  // Auto-play state for animation theater
+  // Auto-play state for animation theater (synchronized with TTS narration)
   const [isAutoPlayingAnimation, setIsAutoPlayingAnimation] = useState(false);
-  const [autoPlayCountdown, setAutoPlayCountdown] = useState(9);
+  const [autoPlayStatus, setAutoPlayStatus] = useState<'idle' | 'speaking' | 'waiting'>('idle');
+  const [autoPlayPauseCountdown, setAutoPlayPauseCountdown] = useState(2);
+
+  const totalAnimationStages = (videoSummary?.stages?.length || 3) + 1;
+
+  // Build consistent narration text for both SpeechButton and Auto-Play
+  const getSceneNarration = (sceneIdx: number, includeIntroHint: boolean = false): string => {
+    if (videoSummary) {
+      if (sceneIdx === 0) {
+        return includeIntroHint
+          ? `Selamat Datang di ${videoSummary.title}! Klik tombol Mulai Cerita di bawah untuk menyaksikan tahapan pemahaman materi ${theme?.judulTema || ''}.`
+          : `Selamat Datang di ${videoSummary.title}! Mari ikuti tahapan pembelajaran ${theme?.judulTema || ''} bersama Lumi.`;
+      }
+      const stage = videoSummary.stages[sceneIdx - 1];
+      return `${stage?.stageName || `Tahap ${sceneIdx}`}${stage?.years ? `, ${stage.years}` : ''}. ${stage?.desc || ''}`;
+    }
+
+    if (sceneIdx === 0) {
+      return includeIntroHint
+        ? 'Selamat Datang di Teater Mesin Waktu IPAS! Klik tombol Mulai Cerita di bawah untuk menyaksikan bagaimana kakek-nenek hidup zaman dahulu, bagaimana kita hidup masa kini, dan impian masa depan nanti!'
+        : 'Selamat Datang di Teater Mesin Waktu IPAS! Mari kita saksikan bagaimana kakek-nenek hidup zaman dahulu, bagaimana kita hidup masa kini, dan impian masa depan nanti!';
+    }
+    if (sceneIdx === 1) {
+      return 'Babak 1: Zaman Dahulu. Kakek dan Nenek. Malam hari diterangi lampu minyak tanah teplok berjelaga. Bepergian naik delman kuda atau sepeda onthel. Mengirim kabar menggunakan surat pos yang butuh berminggu-minggu.';
+    }
+    if (sceneIdx === 2) {
+      return 'Babak 2: Masa Kini. Zaman Kita Sekarang. Rumah terang dengan lampu LED hemat listrik. Komunikasi tatap muka dengan video call ponsel dalam 1 detik. Bepergian naik mobil listrik dan Kereta Cepat Whoosh!';
+    }
+    return 'Babak 3: Masa Nanti. Impian Masa Depan. Mobil terbang bertenaga surya bebas polusi, robot pelayan yang ramah, komunikasi hologram tiga dimensi, dan kota hijau yang asri bebas sampah plastik!';
+  };
+
+  // Sync video URL & reset theater state if active theme changes
+  useEffect(() => {
+    setIsAutoPlayingAnimation(false);
+    setAutoPlayStatus('idle');
+    setVideoScene(0);
+    try {
+      const saved = localStorage.getItem(`mpi_lumi_custom_video_${theme?.id || 'default'}`);
+      if (saved !== null) {
+        setCustomVideoUrl(saved);
+        setVideoMode(saved ? 'video' : 'animation');
+      } else {
+        const defaultUrl = theme?.belajar?.videoSummary?.videoUrl || '';
+        setCustomVideoUrl(defaultUrl);
+        setVideoMode(defaultUrl ? 'video' : 'animation');
+      }
+    } catch {
+      const defaultUrl = theme?.belajar?.videoSummary?.videoUrl || '';
+      setCustomVideoUrl(defaultUrl);
+      setVideoMode(defaultUrl ? 'video' : 'animation');
+    }
+  }, [theme?.id]);
 
   // Handle saving video URL
   const handleSaveVideoUrl = (url: string) => {
@@ -175,47 +226,108 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
   useEffect(() => {
     if (activeTab !== 'video' || videoMode !== 'animation') {
       setIsAutoPlayingAnimation(false);
-      setAutoPlayCountdown(9);
+      setAutoPlayStatus('idle');
+      setAutoPlayPauseCountdown(2);
     }
   }, [activeTab, videoMode]);
 
-  // Auto-play countdown effect: automatically advances scenes and speaks narration!
+  // Synchronized Auto-Play: waits for TTS narration of current scene to finish,
+  // pauses briefly (2s) so the student can absorb the visual, then advances to the next scene.
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (activeTab === 'video' && videoMode === 'animation' && isAutoPlayingAnimation) {
-      interval = setInterval(() => {
-        setAutoPlayCountdown((prev) => {
-          if (prev <= 1) {
-            setVideoScene((curScene) => {
-              const totalStages = (videoSummary?.stages?.length || 3) + 1;
-              const nextScene = (curScene + 1) % totalStages;
+    if (activeTab !== 'video' || videoMode !== 'animation' || !isAutoPlayingAnimation) {
+      return;
+    }
 
-              const nextNarration = videoSummary
-                ? nextScene === 0
-                  ? `Selamat Datang di ${videoSummary.title}!`
-                  : `${videoSummary.stages[nextScene - 1]?.stageName || `Tahap ${nextScene}`}: ${videoSummary.stages[nextScene - 1]?.years || ''}. ${videoSummary.stages[nextScene - 1]?.desc || ''}`
-                : nextScene === 0
-                ? 'Selamat Datang di Teater Mesin Waktu IPAS!'
-                : nextScene === 1
-                ? 'Babak 1: Zaman Dahulu. Kakek dan Nenek. Diterangi lampu minyak tanah teplok dan bepergian naik delman kuda.'
-                : nextScene === 2
-                ? 'Babak 2: Masa Kini. Lampu LED hemat listrik, panggilan video ponsel, dan Kereta Cepat Whoosh!'
-                : 'Babak 3: Masa Nanti. Mobil terbang bertenaga surya dan robot pelayan ramah!';
+    let cancelled = false;
+    let pauseInterval: ReturnType<typeof setInterval> | null = null;
+    let startFallbackTimeout: ReturnType<typeof setTimeout> | null = null;
+    let advanceTimeout: ReturnType<typeof setTimeout> | null = null;
+    let maxSafetyTimeout: ReturnType<typeof setTimeout> | null = null;
+    let hasAdvanced = false;
 
-              speech.speak(nextNarration);
-              return nextScene;
-            });
-            return 9;
-          }
-          return prev - 1;
-        });
+    const narration = getSceneNarration(videoScene);
+    const wordCount = narration.trim().split(/\s+/).filter(Boolean).length;
+    const estimatedReadingMs = Math.max(8000, wordCount * 650 + 2500);
+    const maxCapMs = Math.max(30000, wordCount * 1200 + 5000);
+
+    const scheduleAdvanceAfterNarration = () => {
+      if (cancelled || hasAdvanced) return;
+      hasAdvanced = true;
+      if (startFallbackTimeout) clearTimeout(startFallbackTimeout);
+      if (maxSafetyTimeout) clearTimeout(maxSafetyTimeout);
+
+      // Stop gracefully after finishing the final scene
+      if (videoScene >= totalAnimationStages - 1) {
+        advanceTimeout = setTimeout(() => {
+          if (cancelled) return;
+          setIsAutoPlayingAnimation(false);
+          setAutoPlayStatus('idle');
+        }, 1500);
+        return;
+      }
+
+      setAutoPlayStatus('waiting');
+      setAutoPlayPauseCountdown(2);
+      let remaining = 2;
+
+      pauseInterval = setInterval(() => {
+        if (cancelled) return;
+        remaining -= 1;
+        if (remaining <= 0) {
+          if (pauseInterval) clearInterval(pauseInterval);
+          setVideoScene((prev) => (prev < totalAnimationStages - 1 ? prev + 1 : prev));
+        } else {
+          setAutoPlayPauseCountdown(remaining);
+        }
       }, 1000);
+    };
+
+    setAutoPlayStatus('speaking');
+
+    // Fallback if browser SpeechSynthesis is blocked or never emits onstart
+    startFallbackTimeout = setTimeout(() => {
+      if (cancelled || hasAdvanced) return;
+      if (!speech.isSpeaking(`autoplay-scene-${videoScene}`)) {
+        advanceTimeout = setTimeout(() => {
+          scheduleAdvanceAfterNarration();
+        }, estimatedReadingMs);
+      }
+    }, 1500);
+
+    // Safety cap in case browser SpeechSynthesis hangs without firing onend
+    maxSafetyTimeout = setTimeout(() => {
+      scheduleAdvanceAfterNarration();
+    }, maxCapMs);
+
+    if (speech.isSupported()) {
+      speech.speak(
+        narration,
+        `autoplay-scene-${videoScene}`,
+        () => {
+          if (startFallbackTimeout) clearTimeout(startFallbackTimeout);
+        },
+        () => {
+          scheduleAdvanceAfterNarration();
+        },
+        () => {
+          if (startFallbackTimeout) clearTimeout(startFallbackTimeout);
+          if (!cancelled && !hasAdvanced) {
+            advanceTimeout = setTimeout(() => {
+              scheduleAdvanceAfterNarration();
+            }, Math.min(estimatedReadingMs, 6000));
+          }
+        }
+      );
     }
 
     return () => {
-      if (interval) clearInterval(interval);
+      cancelled = true;
+      if (pauseInterval) clearInterval(pauseInterval);
+      if (startFallbackTimeout) clearTimeout(startFallbackTimeout);
+      if (advanceTimeout) clearTimeout(advanceTimeout);
+      if (maxSafetyTimeout) clearTimeout(maxSafetyTimeout);
     };
-  }, [activeTab, videoMode, isAutoPlayingAnimation, videoSummary]);
+  }, [activeTab, videoMode, isAutoPlayingAnimation, videoScene, theme?.id, totalAnimationStages]);
 
   // Subscribe to speech status
   useEffect(() => {
@@ -939,28 +1051,19 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
 
                     {/* Auto-Play Control Bar on Top of Theater */}
                     <div className="flex items-center justify-between gap-2 flex-wrap bg-slate-50 p-2.5 rounded-2xl border border-slate-200">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <button
                           type="button"
                           onClick={() => {
                             sound.playClick();
-                            setIsAutoPlayingAnimation(!isAutoPlayingAnimation);
                             if (!isAutoPlayingAnimation) {
-                              setAutoPlayCountdown(9);
-                              // Trigger speech for current scene
-                              const curNarration = videoSummary
-                                ? videoScene === 0
-                                  ? `Selamat Datang di ${videoSummary.title}!`
-                                  : `${videoSummary.stages[videoScene - 1]?.stageName || `Tahap ${videoScene}`}: ${videoSummary.stages[videoScene - 1]?.desc || ''}`
-                                : videoScene === 0
-                                ? 'Selamat Datang di Teater Mesin Waktu IPAS!'
-                                : videoScene === 1
-                                ? 'Babak 1: Zaman Dahulu. Kakek dan Nenek.'
-                                : videoScene === 2
-                                ? 'Babak 2: Masa Kini.'
-                                : 'Babak 3: Masa Nanti.';
-                              speech.speak(curNarration);
+                              if (videoScene >= totalAnimationStages - 1) {
+                                setVideoScene(0);
+                              }
+                              setIsAutoPlayingAnimation(true);
                             } else {
+                              setIsAutoPlayingAnimation(false);
+                              setAutoPlayStatus('idle');
                               speech.stop();
                             }
                           }}
@@ -984,27 +1087,17 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
                         </button>
 
                         {isAutoPlayingAnimation && (
-                          <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-lg">
-                            Babak berganti otomatis: <strong>{autoPlayCountdown}s</strong>
+                          <span className="text-xs font-semibold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-lg">
+                            {autoPlayStatus === 'waiting'
+                              ? `⏳ Lanjut babak berikutnya dalam ${autoPlayPauseCountdown}s...`
+                              : '🎙️ Narasi babak sedang diputar...'}
                           </span>
                         )}
                       </div>
 
                       <SpeechButton
                         id={`video-scene-speech-${videoScene}`}
-                        textToSpeak={
-                          videoSummary
-                            ? videoScene === 0
-                              ? `Selamat Datang di ${videoSummary.title}! Klik tombol Mulai Cerita di bawah untuk menyaksikan tahapan pemahaman materi ${theme?.judulTema || ''}.`
-                              : `${videoSummary.stages[videoScene - 1]?.stageName || `Tahap ${videoScene}`}: ${videoSummary.stages[videoScene - 1]?.years || ''}. ${videoSummary.stages[videoScene - 1]?.desc || ''}`
-                            : videoScene === 0
-                            ? 'Selamat Datang di Teater Mesin Waktu IPAS! Klik tombol Mulai Cerita di bawah untuk menyaksikan bagaimana kakek-nenek hidup zaman dahulu, bagaimana kita hidup masa kini, dan impian masa depan nanti!'
-                            : videoScene === 1
-                            ? 'Babak 1: Zaman Dahulu. Kakek dan Nenek. Malam hari diterangi lampu minyak tanah teplok berjelaga. Bepergian naik delman kuda atau sepeda onthel. Mengirim kabar menggunakan surat pos yang butuh berminggu-minggu.'
-                            : videoScene === 2
-                            ? 'Babak 2: Masa Kini. Zaman Kita Sekarang. Rumah terang dengan lampu LED hemat listrik. Komunikasi tatap muka dengan video call ponsel dalam 1 detik. Bepergian naik mobil listrik dan Kereta Cepat Whoosh!'
-                            : 'Babak 3: Masa Nanti. Impian Masa Depan. Mobil terbang bertenaga surya bebas polusi, robot pelayan yang ramah, komunikasi hologram tiga dimensi, dan kota hijau yang asri bebas sampah plastik!'
-                        }
+                        textToSpeak={getSceneNarration(videoScene, true)}
                         label="Dengarkan Suara Babak Ini"
                         size="sm"
                         variant="primary"
@@ -1088,6 +1181,8 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
                           type="button"
                           onClick={() => {
                             sound.playClick();
+                            setIsAutoPlayingAnimation(false);
+                            setAutoPlayStatus('idle');
                             speech.stop();
                             setVideoScene((prev) => (prev > 0 ? prev - 1 : 0));
                           }}
@@ -1103,9 +1198,10 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
                           type="button"
                           onClick={() => {
                             sound.playClick();
+                            setIsAutoPlayingAnimation(false);
+                            setAutoPlayStatus('idle');
                             speech.stop();
-                            const total = (videoSummary?.stages?.length || 3) + 1;
-                            const next = (videoScene + 1) % total;
+                            const next = (videoScene + 1) % totalAnimationStages;
                             setVideoScene(next);
                           }}
                           className="flex items-center gap-1 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 rounded-lg font-bold transition-colors cursor-pointer"
@@ -1136,9 +1232,11 @@ export const BelajarMenu: React.FC<BelajarMenuProps> = ({
                           type="button"
                           onClick={() => {
                             sound.playClick();
+                            setIsAutoPlayingAnimation(false);
+                            setAutoPlayStatus('idle');
                             speech.stop();
                             setVideoScene(0);
-                            setAutoPlayCountdown(9);
+                            setAutoPlayPauseCountdown(2);
                           }}
                           className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
                           title="Ulangi dari Awal"

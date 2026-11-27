@@ -379,6 +379,7 @@ export default function App() {
       {/* SUB-SCREENS */}
       {activeScreen === 'belajar' && (
         <BelajarMenu
+          key={activeTheme.id}
           theme={activeTheme}
           onBack={() => setActiveScreen('home')}
           onGoToBermain={() => {
@@ -392,6 +393,7 @@ export default function App() {
 
       {activeScreen === 'bermain' && (
         <BermainMenu
+          key={activeTheme.id}
           theme={activeTheme}
           onBack={() => setActiveScreen('home')}
           onGoToBerlatih={() => {
@@ -405,6 +407,7 @@ export default function App() {
 
       {activeScreen === 'berlatih' && (
         <BerlatihMenu
+          key={activeTheme.id}
           theme={activeTheme}
           onBack={() => setActiveScreen('home')}
           onSaveScore={handleSaveScore}
@@ -415,6 +418,7 @@ export default function App() {
 
       {activeScreen === 'refleksi' && (
         <RefleksiMenu
+          key={activeTheme.id}
           theme={activeTheme}
           onBack={() => setActiveScreen('home')}
           savedReflection={reflection}
@@ -423,7 +427,7 @@ export default function App() {
       )}
 
       {activeScreen === 'sumber' && (
-        <SumberBelajarMenu theme={activeTheme} onBack={() => setActiveScreen('home')} />
+        <SumberBelajarMenu key={activeTheme.id} theme={activeTheme} onBack={() => setActiveScreen('home')} />
       )}
 
       {activeScreen === 'pengembang' && (

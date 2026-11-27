@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft,
   Sliders,
@@ -21,6 +21,20 @@ import confetti from 'canvas-confetti';
 import { GAME_QUESTIONS } from '../data/quizQuestions';
 import { ReorderItem, MatchingPair, ThemeConfig } from '../types';
 import { sound } from '../utils/audio';
+
+interface CustomSimOption {
+  text: string;
+  isCorrect: boolean;
+  feedback: string;
+}
+
+interface CustomSimScenario {
+  id: number | string;
+  title: string;
+  situation: string;
+  icon: string;
+  options: CustomSimOption[];
+}
 
 interface BermainMenuProps {
   onBack: () => void;
@@ -173,6 +187,15 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
 
   const currentGame = games[currentGameIndex] || games[0];
 
+  // Deterministic shuffled options for matching dropdown so options aren't aligned 1-to-1
+  const shuffledMatchingOptions = useMemo(() => {
+    if (currentGame?.type !== 'matching') return [];
+    const texts = currentGame.pairs.map((p) => p.rightText);
+    if (texts.length <= 1) return texts;
+    const rotated = [...texts.slice(1), texts[0]];
+    return rotated;
+  }, [currentGame, theme?.id]);
+
   // When game switches to a reorder type, sync items
   useEffect(() => {
     if (currentGame?.type === 'reorder') {
@@ -181,8 +204,127 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
     }
   }, [currentGameIndex, currentGame]);
 
-  // --- State for Lampu Sentuhan Simulation (Theme #2 & safety themes) ---
+  // --- Simulation Routing ---
   const isLampuSentuhan = theme?.bermain?.simulation?.type === 'lampu_sentuhan' || theme?.id === 'tubuhku_berharga';
+  const isMesinWaktu = !theme || theme?.id === 'dahulu_kini_nanti' || theme?.bermain?.simulation?.type === 'mesin_waktu';
+
+  // Build custom interactive scenarios for non-Mesin-Waktu / non-Lampu-Sentuhan themes
+  const customScenarios: CustomSimScenario[] = useMemo(() => {
+    const rawScenarios = theme?.bermain?.simulation?.data?.scenarios;
+    if (Array.isArray(rawScenarios) && rawScenarios.length > 0 && Array.isArray(rawScenarios[0]?.options)) {
+      return rawScenarios as CustomSimScenario[];
+    }
+
+    // Synthesize relevant interactive scenarios directly from the active theme's learning & HOTS content
+    const synthesized: CustomSimScenario[] = [];
+    const pemantik = theme?.belajar?.pertanyaanPemantik || [];
+    pemantik.forEach((p, idx) => {
+      if (p.options && p.options.length >= 2) {
+        synthesized.push({
+          id: `pemantik-${idx + 1}`,
+          title: p.title,
+          situation: `${p.scenario} ${p.question}`,
+          icon: (p.imageEmoji || theme?.emojiMaskot || '🔍').split(' ')[0],
+          options: p.options.map((opt, oIdx) => ({
+            text: opt.text,
+            isCorrect: oIdx === 0,
+            feedback: opt.feedback,
+          })),
+        });
+      }
+    });
+
+    const hots = theme?.berlatih?.questions || [];
+    hots.slice(0, Math.max(0, 4 - synthesized.length)).forEach((q, idx) => {
+      if (q.options && q.options.length >= 2) {
+        synthesized.push({
+          id: `kasus-${idx + 1}`,
+          title: `Studi Kasus ${idx + 1}: ${theme?.judulTema || 'Eksplorasi'}`,
+          situation: `${q.caseStory} ${q.question}`,
+          icon: theme?.emojiMaskot || '🧪',
+          options: q.options.slice(0, 3).map((optText, oIdx) => ({
+            text: optText,
+            isCorrect: oIdx === q.correctAnswer,
+            feedback: q.explanation,
+          })),
+        });
+      }
+    });
+
+    if (synthesized.length === 0) {
+      synthesized.push({
+        id: 'default-custom-1',
+        title: `Eksplorasi Topik: ${theme?.judulTema || 'Pembelajaran'}`,
+        situation: `Bagaimana sikap terbaik saat mempelajari dan mempraktikkan materi ${theme?.judulTema || 'ini'} bersama teman-teman?`,
+        icon: theme?.emojiMaskot || '🌟',
+        options: [
+          {
+            text: 'Mengamati dengan teliti, berdiskusi dengan sopan, dan menerapkannya dalam kehidupan sehari-hari.',
+            isCorrect: true,
+            feedback: `Tepat sekali! Belajar ${theme?.judulTema || 'materi ini'} akan sangat bermakna jika diamalkan dengan penuh tanggung jawab.`,
+          },
+          {
+            text: 'Hanya membaca sekilas tanpa memahami manfaatnya.',
+            isCorrect: false,
+            feedback: 'Kurang tepat. Memahami konsep dan manfaat nyata membuat belajar lebih seru dan bermanfaat.',
+          },
+        ],
+      });
+    }
+
+    return synthesized;
+  }, [theme]);
+
+  const [customSimIdx, setCustomSimIdx] = useState(0);
+  const [customSimSelectedOpt, setCustomSimSelectedOpt] = useState<number | null>(null);
+  const [customSimFeedback, setCustomSimFeedback] = useState<{ isCorrect: boolean; message: string } | null>(null);
+  const [customSimScore, setCustomSimScore] = useState(0);
+  const [customSimCompleted, setCustomSimCompleted] = useState(false);
+
+  const currentCustomScenario = customScenarios[customSimIdx] || customScenarios[0];
+
+  const handleCustomSimChoose = (optIdx: number) => {
+    if (customSimFeedback || !currentCustomScenario) return;
+    sound.playClick();
+    setCustomSimSelectedOpt(optIdx);
+    const chosen = currentCustomScenario.options[optIdx];
+    if (chosen?.isCorrect) {
+      sound.playCorrect();
+      setCustomSimScore((prev) => prev + 1);
+      setCustomSimFeedback({
+        isCorrect: true,
+        message: chosen.feedback,
+      });
+    } else {
+      sound.playWrong();
+      setCustomSimFeedback({
+        isCorrect: false,
+        message: `Kurang tepat. ${chosen?.feedback || 'Coba perhatikan kembali situasi kasus di atas.'}`,
+      });
+    }
+  };
+
+  const handleNextCustomScenario = () => {
+    sound.playClick();
+    setCustomSimSelectedOpt(null);
+    setCustomSimFeedback(null);
+    if (customSimIdx < customScenarios.length - 1) {
+      setCustomSimIdx((prev) => prev + 1);
+    } else {
+      setCustomSimCompleted(true);
+      sound.playFanfare();
+      triggerConfetti();
+    }
+  };
+
+  const handleRestartCustomSim = () => {
+    sound.playClick();
+    setCustomSimIdx(0);
+    setCustomSimSelectedOpt(null);
+    setCustomSimFeedback(null);
+    setCustomSimScore(0);
+    setCustomSimCompleted(false);
+  };
   const lampuScenarios = (theme?.bermain?.simulation?.data?.scenarios as Array<{
     id: number;
     title: string;
@@ -425,6 +567,10 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
   const handleNextGame = () => {
     sound.playClick();
     setFeedback(null);
+    setMcSelection(null);
+    setComplexSelection([]);
+    setMatchingSelections({});
+    setShortInput('');
     if (currentGameIndex < games.length - 1) {
       setCurrentGameIndex(prev => prev + 1);
     } else {
@@ -451,7 +597,36 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
     setFeedback(null);
     setGameScore(0);
     setIsCompletedAllGames(false);
+    if (initialReorderQuestion?.items) {
+      setReorderedItems([...initialReorderQuestion.items]);
+    }
   };
+
+  // Reset simulation and game progress cleanly if active theme changes
+  useEffect(() => {
+    setActiveTab('simulasi');
+    setCurrentGameIndex(0);
+    setMcSelection(null);
+    setComplexSelection([]);
+    setMatchingSelections({});
+    setShortInput('');
+    setFeedback(null);
+    setGameScore(0);
+    setIsCompletedAllGames(false);
+    setLampuScenarioIdx(0);
+    setLampuSelectedColor(null);
+    setLampuFeedback(null);
+    setLampuScore(0);
+    setLampuCompleted(false);
+    setCustomSimIdx(0);
+    setCustomSimSelectedOpt(null);
+    setCustomSimFeedback(null);
+    setCustomSimScore(0);
+    setCustomSimCompleted(false);
+    if (initialReorderQuestion?.items) {
+      setReorderedItems([...initialReorderQuestion.items]);
+    }
+  }, [theme?.id]);
 
   const moveItemUp = (idx: number) => {
     if (idx === 0) return;
@@ -542,7 +717,13 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
             }`}
           >
             <Clock className="w-4 h-4" />
-            <span>{isLampuSentuhan ? '1. Simulasi Lampu Sentuhan 🚦' : (theme?.bermain?.simulation?.title || '1. Menu Simulasi Interaktif')}</span>
+            <span>
+              {isLampuSentuhan
+                ? '1. Simulasi Lampu Sentuhan 🚦'
+                : isMesinWaktu
+                ? '1. Simulasi Mesin Waktu 🕰️'
+                : `1. ${theme?.bermain?.simulation?.title || 'Simulasi Eksplorasi Interaktif'} 🧪`}
+            </span>
           </button>
 
           <button
@@ -748,7 +929,7 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
                 </div>
               )}
             </div>
-          ) : (
+          ) : isMesinWaktu ? (
             <div className="bg-white rounded-3xl p-6 border border-amber-100 shadow-sm space-y-6 animate-in fade-in">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
@@ -882,6 +1063,163 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
                   </div>
                 </div>
               </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-indigo-200 shadow-sm space-y-6 animate-in fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-100 pb-4">
+                <div>
+                  <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
+                    {theme?.bermain?.simulation?.badge || 'Simulasi Studi Kasus Interaktif'}
+                  </span>
+                  <h3 className="text-xl sm:text-2xl font-bold text-slate-800 font-display mt-2">
+                    {theme?.emojiMaskot || '🧪'} {theme?.bermain?.simulation?.title || `Eksplorasi Interaktif: ${theme?.judulTema}`}
+                  </h3>
+                  {theme?.bermain?.simulation?.description && (
+                    <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                      {theme.bermain.simulation.description}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs bg-indigo-100 text-indigo-900 px-3 py-1 rounded-full font-bold">
+                    Skenario {customSimIdx + 1} dari {customScenarios.length}
+                  </span>
+                  <span className="text-xs bg-amber-100 text-amber-900 px-3 py-1 rounded-full font-bold">
+                    Poin: {customSimScore}
+                  </span>
+                </div>
+              </div>
+
+              {customSimCompleted ? (
+                <div className="text-center py-8 space-y-4 animate-in zoom-in-95">
+                  <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center shadow-lg text-4xl">
+                    {theme?.emojiMaskot || '🌟'}
+                  </div>
+                  <h4 className="text-2xl font-bold text-slate-800 font-display">
+                    Hebat! Simulasi {theme?.judulTema} Tuntas!
+                  </h4>
+                  <p className="text-sm text-slate-600 max-w-md mx-auto">
+                    Kamu berhasil menyelesaikan seluruh skenario eksplorasi tema <strong>{theme?.judulTema}</strong> dengan skor <strong>{customSimScore} dari {customScenarios.length} benar</strong>!
+                  </p>
+                  <div className="flex items-center justify-center gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={handleRestartCustomSim}
+                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      <span>Ulangi Simulasi</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sound.playClick();
+                        setActiveTab('game');
+                      }}
+                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>Lanjut ke Tantangan Game</span>
+                      <span>🎮➔</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="p-6 bg-slate-50 border-2 border-slate-200 rounded-3xl flex flex-col md:flex-row items-center gap-5">
+                    <div className="w-20 h-20 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-4xl shadow-xs shrink-0">
+                      {currentCustomScenario.icon}
+                    </div>
+                    <div className="flex-1 text-center md:text-left">
+                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider block mb-1">
+                        Studi Kasus #{customSimIdx + 1} • {theme?.judulTema}:
+                      </span>
+                      <h4 className="text-lg sm:text-xl font-bold text-slate-900 font-display mb-1.5">
+                        {currentCustomScenario.title}
+                      </h4>
+                      <p className="text-sm text-slate-700 leading-relaxed font-medium bg-white p-3.5 rounded-xl border border-slate-200/80">
+                        {currentCustomScenario.situation}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 text-center">
+                      Pilih Tindakan atau Jawaban yang Paling Tepat:
+                    </label>
+                    <div className="space-y-3">
+                      {currentCustomScenario.options.map((opt, optIdx) => {
+                        const isSelected = customSimSelectedOpt === optIdx;
+                        const showResult = !!customSimFeedback;
+                        return (
+                          <button
+                            key={optIdx}
+                            type="button"
+                            disabled={showResult}
+                            onClick={() => handleCustomSimChoose(optIdx)}
+                            className={`w-full text-left p-4 rounded-2xl border-2 text-xs sm:text-sm font-medium transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                              showResult && opt.isCorrect
+                                ? 'bg-emerald-50 border-emerald-500 text-emerald-950 font-bold'
+                                : showResult && isSelected && !opt.isCorrect
+                                ? 'bg-rose-50 border-rose-400 text-rose-900'
+                                : isSelected
+                                ? 'bg-indigo-50 border-indigo-500 text-indigo-950 font-bold'
+                                : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-400 hover:bg-indigo-50/40'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="w-7 h-7 rounded-full border border-current flex items-center justify-center text-xs font-bold shrink-0">
+                                {String.fromCharCode(65 + optIdx)}
+                              </span>
+                              <span>{opt.text}</span>
+                            </div>
+                            {showResult && opt.isCorrect && (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {customSimFeedback && (
+                    <div
+                      className={`p-4 rounded-2xl border text-xs sm:text-sm flex items-start gap-3 animate-in fade-in ${
+                        customSimFeedback.isCorrect
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                          : 'bg-amber-50 border-amber-300 text-amber-950'
+                      }`}
+                    >
+                      {customSimFeedback.isCorrect ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <strong className="block mb-0.5">
+                          {customSimFeedback.isCorrect ? 'Tepat Sekali! 🎉' : 'Pembahasan:'}
+                        </strong>
+                        <p className="leading-relaxed">{customSimFeedback.message}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {customSimFeedback && (
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={handleNextCustomScenario}
+                        className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all cursor-pointer flex items-center gap-2"
+                      >
+                        <span>
+                          {customSimIdx < customScenarios.length - 1
+                            ? 'Lanjut ke Skenario Berikutnya ➔'
+                            : 'Selesaikan Simulasi 🌟'}
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )
         )}
@@ -1031,7 +1369,9 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
                 {currentGame.type === 'matching' && (
                   <div className="space-y-4">
                     <span className="text-xs text-slate-500">
-                      Pilihlah alat masa KINI yang tepat pada menu dropdown untuk mencocokkan alat zaman DAHULU:
+                      {isMesinWaktu
+                        ? 'Pilihlah alat masa KINI yang tepat pada menu dropdown untuk mencocokkan alat zaman DAHULU:'
+                        : 'Pilihlah pasangan jawaban yang paling tepat pada menu dropdown untuk setiap pernyataan di sebelah kiri:'}
                     </span>
                     <div className="space-y-3">
                       {currentGame.pairs.map((pair) => (
@@ -1040,7 +1380,7 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
                           className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm"
                         >
                           <div className="font-bold text-slate-800 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-amber-500" />
+                            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
                             <span>{pair.leftText}</span>
                           </div>
                           <select
@@ -1055,10 +1395,12 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
                             }}
                             className="p-2 rounded-xl bg-white border border-slate-300 text-slate-700 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-hidden max-w-sm"
                           >
-                            <option value="">-- Pilih Alat Pengganti Masa Kini --</option>
-                            {currentGame.pairs.map((p) => (
-                              <option key={p.id} value={p.rightText}>
-                                {p.rightText}
+                            <option value="">
+                              {isMesinWaktu ? '-- Pilih Alat Pengganti Masa Kini --' : '-- Pilih Pasangan yang Tepat --'}
+                            </option>
+                            {shuffledMatchingOptions.map((rightText, optIdx) => (
+                              <option key={optIdx} value={rightText}>
+                                {rightText}
                               </option>
                             ))}
                           </select>
@@ -1081,7 +1423,7 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
                       disabled={feedback?.submitted}
                       value={shortInput}
                       onChange={(e) => setShortInput(e.target.value)}
-                      placeholder="Ketik nama benda tradisional di sini..."
+                      placeholder={isMesinWaktu ? 'Ketik nama benda tradisional di sini...' : 'Ketik jawaban singkatmu di sini...'}
                       className="w-full px-4 py-3 bg-white border border-slate-300 rounded-2xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-hidden text-slate-800"
                     />
                   </div>
@@ -1090,12 +1432,16 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
                 {/* GAME 5: REORDERING (PANAH NAIK DAN TURUN) */}
                 {currentGame.type === 'reorder' && (
                   <div className="space-y-3">
-                    <span className="text-xs text-slate-500 flex items-center gap-1">
+                    <span className="text-xs text-slate-500 flex items-center gap-1 flex-wrap">
                       <span>Gunakan tombol</span>
                       <strong className="text-amber-700">Panah Naik ⬆️</strong>
                       <span>dan</span>
                       <strong className="text-amber-700">Panah Turun ⬇️</strong>
-                      <span>untuk mengurutkan dari masa paling kuno hingga masa depan:</span>
+                      <span>
+                        {isMesinWaktu
+                          ? 'untuk mengurutkan dari masa paling kuno hingga masa depan:'
+                          : 'untuk menyusun urutan langkah yang paling tepat dari atas ke bawah:'}
+                      </span>
                     </span>
 
                     <div className="space-y-2.5">
@@ -1176,7 +1522,7 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
                       className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md cursor-pointer flex items-center gap-2"
                     >
                       <span>
-                        {currentGameIndex < GAME_QUESTIONS.length - 1
+                        {currentGameIndex < games.length - 1
                           ? 'Tantangan Selanjutnya ➔'
                           : 'Selesaikan Seluruh Game 🏆'}
                       </span>
@@ -1191,7 +1537,7 @@ export const BermainMenu: React.FC<BermainMenuProps> = ({
 
       {/* Footer */}
       <footer className="max-w-5xl w-full mx-auto pt-4 flex items-center justify-between text-xs text-slate-500 border-t border-slate-200">
-        <span>MPI Lumi IPAS SD Kelas 3 • Mesin Waktu &amp; Game Interaktif</span>
+        <span>MPI Lumi • {theme?.judulTema || 'Dahulu, Kini, dan Nanti'} ({theme?.kelas || 'Kelas III SD'}) • Simulasi &amp; Game Interaktif</span>
         <span>Asyik, Menyenangkan, &amp; Edukatif</span>
       </footer>
     </div>

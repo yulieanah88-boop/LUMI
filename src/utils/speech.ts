@@ -98,19 +98,23 @@ class SpeechService {
     this.notify();
 
     utterance.onstart = () => {
+      if (this.currentUtterance !== utterance) return;
       onStart?.();
     };
 
     utterance.onend = () => {
+      if (this.currentUtterance !== utterance) return;
+      const cb = this.currentOnEnd;
       this.cleanup();
-      onEnd?.();
+      cb?.();
     };
 
     utterance.onerror = (e) => {
+      if (this.currentUtterance !== utterance) return;
+      this.cleanup();
       if (e.error !== 'canceled' && e.error !== 'interrupted') {
         onError?.();
       }
-      this.cleanup();
     };
 
     this.currentUtterance = utterance;
@@ -126,13 +130,11 @@ class SpeechService {
 
   public stop() {
     if (this.synth) {
-      const cb = this.currentOnEnd;
-      this.synth.cancel();
       this.currentUtterance = null;
       this.currentId = null;
       this.currentOnEnd = null;
+      this.synth.cancel();
       this.notify();
-      cb?.();
     }
   }
 

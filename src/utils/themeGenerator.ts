@@ -61,6 +61,11 @@ export function generateFallbackTheme(input: ThemeGeneratorInput): ThemeConfig {
   const topic = input.topic.trim();
   const subject = input.subject?.trim() || 'IPAS';
   const gradePhase = input.gradePhase?.trim() || 'Fase B (Kelas 3 SD)';
+  const detectedFase = /fase\s*c|kelas\s*[56]/i.test(gradePhase)
+    ? 'Fase C'
+    : /fase\s*a|kelas\s*[12]/i.test(gradePhase)
+    ? 'Fase A'
+    : 'Fase B';
   const paletteId = input.paletteId || 'rose';
 
   const paletteMap: Record<string, any> = {
@@ -352,13 +357,13 @@ export function generateFallbackTheme(input: ThemeGeneratorInput): ThemeConfig {
   return {
     id: `custom_${Date.now()}`,
     judulTema: topic,
-    subJudul: `Eksplorasi Pembelajaran Interaktif ${subject} Kelas 3 SD`,
+    subJudul: `Eksplorasi Pembelajaran Interaktif ${subject} ${gradePhase}`,
     mataPelajaran: subject,
-    fase: 'Fase B',
+    fase: detectedFase,
     kelas: gradePhase,
     emojiMaskot: '🌟',
-    sapaanLumi: `Halo Sahabat Cilik! Selamat datang di modul pembelajaran interaktif "${topic}". Mari belajar bersama Lumi dengan penuh semangat dan rasa gembira!`,
-    deskripsiSingkat: `Mempelajari konsep dasar, eksplorasi interaktif, dan penerapan nyata materi ${topic} untuk siswa Kelas 3 SD.`,
+    sapaanLumi: `Halo Sahabat Hebat! Selamat datang di modul pembelajaran interaktif "${topic}". Mari belajar bersama Lumi dengan penuh semangat dan rasa gembira!`,
+    deskripsiSingkat: `Mempelajari konsep dasar, eksplorasi interaktif, dan penerapan nyata materi ${topic} untuk ${gradePhase}.`,
     palet: selectedPalette,
     tujuanPembelajaran: [
       {
@@ -373,7 +378,7 @@ export function generateFallbackTheme(input: ThemeGeneratorInput): ThemeConfig {
       },
       {
         id: 3,
-        text: `Peserta didik dapat memecahkan masalah kontekstual melalui penalaran kritis tingkat tinggi (HOTS).`,
+        text: `Peserta didik dapat memecahkan masalah kontekstual tentang "${topic}" melalui penalaran kritis tingkat tinggi (HOTS).`,
         icon: '🌟',
       },
       {
@@ -382,7 +387,7 @@ export function generateFallbackTheme(input: ThemeGeneratorInput): ThemeConfig {
         icon: '💖',
       },
     ],
-    capaianPembelajaran: `Pada Fase B (${gradePhase}), peserta didik memahami materi "${topic}" melalui pengamatan langsung, bernalar kritis dalam menganalisis informasi, serta menerapkan perilaku bertanggung jawab dalam kehidupan sosial bermasyarakat.`,
+    capaianPembelajaran: `Pada ${detectedFase} (${gradePhase}), peserta didik memahami materi "${topic}" melalui pengamatan langsung, bernalar kritis dalam menganalisis informasi, serta menerapkan perilaku bertanggung jawab dalam kehidupan bermasyarakat.`,
     belajar: {
       pertanyaanPemantik: [
         {
@@ -494,9 +499,105 @@ export function generateFallbackTheme(input: ThemeGeneratorInput): ThemeConfig {
     bermain: {
       simulation: {
         type: 'custom_interactive',
-        title: `Laboratorium Eksplorasi Interaktif: ${topic}`,
+        title: `Laboratorium Studi Kasus: ${topic}`,
         badge: 'Praktik & Eksplorasi',
-        description: `Eksplorasi interaktif berbagai studi kasus dan skenario seputar topik ${topic}.`,
+        description: `Eksplorasi interaktif berbagai studi kasus dan skenario pengambilan keputusan seputar topik ${topic}.`,
+        data: {
+          scenarios: [
+            {
+              id: 1,
+              title: `Mengamati Konsep Dasar ${topic}`,
+              situation: `Saat belajar topik "${topic}", seorang teman bingung membedakan ciri utama dan contoh nyatanya di sekitar sekolah. Apa langkah terbaik yang kamu lakukan?`,
+              icon: '🔍',
+              options: [
+                {
+                  text: `Mengajak mengamati contoh nyata "${topic}" di lingkungan sekitar lalu mencatat poin pentingnya bersama.`,
+                  isCorrect: true,
+                  feedback: `Tepat sekali! Pengamatan langsung terhadap contoh nyata membuat konsep "${topic}" jauh lebih mudah dipahami.`,
+                },
+                {
+                  text: `Menyuruh teman menghafal buku tanpa menjelaskan contohnya.`,
+                  isCorrect: false,
+                  feedback: `Kurang tepat. Menghafal tanpa memahami contoh nyata membuat ilmu cepat terlupakan.`,
+                },
+                {
+                  text: `Membiarkan saja karena bukan tugas kelompokmu.`,
+                  isCorrect: false,
+                  feedback: `Kurang tepat. Saling membantu teman memahami pelajaran menumbuhkan sikap gotong royong.`,
+                },
+              ],
+            },
+            {
+              id: 2,
+              title: `Menerapkan ${topic} dalam Kehidupan Sehari-hari`,
+              situation: `Kamu menemukan situasi nyata di rumah yang berkaitan erat dengan pembelajaran "${topic}" pada mata pelajaran ${subject}. Tindakan mana yang paling bijak?`,
+              icon: '🏡',
+              options: [
+                {
+                  text: `Mempraktikkan prinsip "${topic}" dengan penuh tanggung jawab dan membagikannya kepada anggota keluarga.`,
+                  isCorrect: true,
+                  feedback: `Hebat! Ilmu tentang "${topic}" menjadi sangat bermanfaat saat dipraktikkan langsung di rumah.`,
+                },
+                {
+                  text: `Menganggap pelajaran "${topic}" hanya berlaku di ruang kelas saja.`,
+                  isCorrect: false,
+                  feedback: `Kurang tepat. Pembelajaran Kurikulum Merdeka dirancang agar berguna dalam kehidupan nyata sehari-hari.`,
+                },
+                {
+                  text: `Menunggu disuruh orang tua baru mau mencoba mempraktikkannya.`,
+                  isCorrect: false,
+                  feedback: `Kurang tepat. Sikap mandiri berarti berani berinisiatif melakukan hal baik tanpa harus selalu disuruh.`,
+                },
+              ],
+            },
+            {
+              id: 3,
+              title: `Menyelesaikan Masalah Terkait ${topic}`,
+              situation: `Di kelompok belajarmu muncul dua pendapat berbeda saat berdiskusi tentang studi kasus "${topic}". Bagaimana cara menyelesaikannya?`,
+              icon: '🤝',
+              options: [
+                {
+                  text: `Mendengarkan kedua pendapat dengan tenang, mencari bukti dari materi "${topic}", dan bermusyawarah mencari solusi terbaik.`,
+                  isCorrect: true,
+                  feedback: `Luar biasa! Musyawarah berbasis fakta dan saling menghargai adalah ciri pelajar bernalar kritis.`,
+                },
+                {
+                  text: `Memaksakan pendapat sendiri agar cepat selesai.`,
+                  isCorrect: false,
+                  feedback: `Kurang tepat. Memaksakan kehendak merusak kekompakan kelompok.`,
+                },
+                {
+                  text: `Menghentikan diskusi dan tidak jadi mengumpulkan tugas.`,
+                  isCorrect: false,
+                  feedback: `Kurang tepat. Perbedaan pendapat justru memperkaya ide jika dibicarakan dengan baik.`,
+                },
+              ],
+            },
+            {
+              id: 4,
+              title: `Komitmen Karakter Setelah Belajar ${topic}`,
+              situation: `Setelah memahami seluruh materi "${topic}", komitmen apa yang paling tepat untuk menjaga kebermanfaatan ilmu tersebut?`,
+              icon: '🌟',
+              options: [
+                {
+                  text: `Terus berlatih, menjaga rasa ingin tahu, dan mengamalkan nilai kebaikan dari topik "${topic}" secara konsisten.`,
+                  isCorrect: true,
+                  feedback: `Sempurna! Konsistensi dalam mengamalkan ilmu akan membentuk karakter unggul dan berakhlak mulia.`,
+                },
+                {
+                  text: `Berhenti belajar karena merasa sudah tahu semuanya.`,
+                  isCorrect: false,
+                  feedback: `Kurang tepat. Pelajar sejati selalu rendah hati dan terus belajar sepanjang hayat.`,
+                },
+                {
+                  text: `Menyimpan ilmu untuk diri sendiri tanpa mau berbagi kebaikan.`,
+                  isCorrect: false,
+                  feedback: `Kurang tepat. Berbagi ilmu dan kebaikan justru membuat pemahaman kita semakin kuat.`,
+                },
+              ],
+            },
+          ],
+        },
       },
       games: fallbackGames,
     },
@@ -514,7 +615,7 @@ export function generateFallbackTheme(input: ThemeGeneratorInput): ThemeConfig {
       favoriteOptions: [
         'Pertanyaan Pemantik Bergambar (Menu Belajar)',
         'Materi Interaktif & Rangkuman (Menu Belajar)',
-        'Tantangan Game Edukasi 5 Format (Menu Bermain)',
+        'Simulasi & Game Edukasi 5 Format (Menu Bermain)',
         '10 Soal Asesmen HOTS Berpikir Kritis (Menu Berlatih)',
         'Mengunduh Piagam Prestasi Belajar Digital',
       ],
@@ -522,11 +623,11 @@ export function generateFallbackTheme(input: ThemeGeneratorInput): ThemeConfig {
     },
     sumberBelajar: [
       {
-        title: `Buku Siswa & Panduan Guru ${subject} Kelas 3 SD`,
+        title: `Buku Siswa & Panduan Guru ${subject} ${gradePhase}`,
         author: 'Kementerian Pendidikan, Kebudayaan, Riset, dan Teknologi RI',
         year: '2024',
         type: 'Buku Teks Kurikulum Merdeka',
-        description: `Buku teks resmi rujukan Capaian Pembelajaran Fase B untuk topik ${topic}.`,
+        description: `Buku teks resmi rujukan Capaian Pembelajaran ${detectedFase} untuk topik ${topic}.`,
         link: 'https://buku.kemdikbud.go.id',
       },
       {
