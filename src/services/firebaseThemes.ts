@@ -7,11 +7,13 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
 } from 'firebase/firestore';
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from '../firebase';
@@ -24,6 +26,9 @@ import {
 } from '../data/themes';
 
 const CUSTOM_THEMES_COLLECTION = 'custom_themes';
+
+let inFlightSyncPromise: Promise<number> | null = null;
+let inFlightSyncUid: string | null = null;
 
 function stripUndefinedDeep<T>(value: T): T {
   if (Array.isArray(value)) {
@@ -71,36 +76,48 @@ export function sanitizeThemeForFirestore(theme: ThemeConfig, user: User) {
           },
         ];
 
-  const payload = {
-    id: cleanId,
-    judulTema: (theme.judulTema || 'Tema Pembelajaran').trim().slice(0, 200),
+  const updatableFields = {
+    judulTema: ((theme.judulTema || '').trim() || 'Tema Pembelajaran').slice(0, 200),
     subJudul: (theme.subJudul || '').trim().slice(0, 300),
-    mataPelajaran: (theme.mataPelajaran || 'IPAS').trim().slice(0, 150),
-    fase: (theme.fase || 'Fase B').trim().slice(0, 60),
-    kelas: (theme.kelas || 'Kelas 3 SD').trim().slice(0, 100),
-    emojiMaskot: (theme.emojiMaskot || '🌟').trim().slice(0, 16) || '🌟',
+    mataPelajaran: ((theme.mataPelajaran || '').trim() || 'IPAS').slice(0, 150),
+    fase: ((theme.fase || '').trim() || 'Fase B').slice(0, 60),
+    kelas: ((theme.kelas || '').trim() || 'Kelas 3 SD').slice(0, 100),
+    emojiMaskot: ((theme.emojiMaskot || '').trim() || '🌟').slice(0, 16),
     sapaanLumi: (theme.sapaanLumi || '').trim().slice(0, 1000),
     deskripsiSingkat: (theme.deskripsiSingkat || '').trim().slice(0, 500),
     capaianPembelajaran: (theme.capaianPembelajaran || '').trim().slice(0, 2000),
-    palet: stripUndefinedDeep(theme.palet || {}),
-    tujuanPembelajaran: stripUndefinedDeep(safeTujuan),
-    belajar: stripUndefinedDeep(theme.belajar || {}),
-    bermain: stripUndefinedDeep(theme.bermain || {}),
-    berlatih: stripUndefinedDeep(theme.berlatih || {}),
-    refleksi: stripUndefinedDeep(theme.refleksi || {}),
-    sumberBelajar: stripUndefinedDeep((theme.sumberBelajar || []).slice(0, 20)),
-    glosarium: stripUndefinedDeep((theme.glosarium || []).slice(0, 50)),
-    sertifikat: stripUndefinedDeep(theme.sertifikat || {}),
-    badges: stripUndefinedDeep(safeBadges),
+    palet: stripUndefinedDeep(theme.palet && typeof theme.palet === 'object' ? theme.palet : {}),
+    tujuanPembelajaran: stripUndefinedDeep(safeTujuan.filter((x) => x && typeof x === 'object')),
+    belajar: stripUndefinedDeep(theme.belajar && typeof theme.belajar === 'object' ? theme.belajar : {}),
+    bermain: stripUndefinedDeep(theme.bermain && typeof theme.bermain === 'object' ? theme.bermain : {}),
+    berlatih: stripUndefinedDeep(theme.berlatih && typeof theme.berlatih === 'object' ? theme.berlatih : {}),
+    refleksi: stripUndefinedDeep(theme.refleksi && typeof theme.refleksi === 'object' ? theme.refleksi : {}),
+    sumberBelajar: stripUndefinedDeep(
+      (Array.isArray(theme.sumberBelajar) ? theme.sumberBelajar : [])
+        .filter((x) => x && typeof x === 'object')
+        .slice(0, 20)
+    ),
+    glosarium: stripUndefinedDeep(
+      (Array.isArray(theme.glosarium) ? theme.glosarium : [])
+        .filter((x) => x && typeof x === 'object')
+        .slice(0, 50)
+    ),
+    sertifikat: stripUndefinedDeep(theme.sertifikat && typeof theme.sertifikat === 'object' ? theme.sertifikat : {}),
+    badges: stripUndefinedDeep(safeBadges.filter((x) => x && typeof x === 'object')),
+    updatedAt: serverTimestamp(),
+  };
+
+  const payload = {
+    id: cleanId,
+    ...updatableFields,
     isCustom: true,
     isPublished: true,
     creatorUid: user.uid,
     creatorName: (user.displayName || 'Guru MPI Lumi').trim().slice(0, 120),
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
   };
 
-  return { cleanId, payload };
+  return { cleanId, payload, updatableFields };
 }
 
 export async function signInWithGooglePopup(): Promise<User> {
@@ -110,18 +127,61 @@ export async function signInWithGooglePopup(): Promise<User> {
 }
 
 export async function signOutGoogle(): Promise<void> {
+  inFlightSyncPromise = null;
+  inFlightSyncUid = null;
   await signOut(auth);
 }
 
 export async function saveCustomThemeToFirestore(
   theme: ThemeConfig,
-  user: User
+  user: User,
+  options?: { skipIfExists?: boolean }
 ): Promise<ThemeConfig> {
-  const { cleanId, payload } = sanitizeThemeForFirestore(theme, user);
+  const { cleanId, payload, updatableFields } = sanitizeThemeForFirestore(theme, user);
   const path = `${CUSTOM_THEMES_COLLECTION}/${cleanId}`;
+  const docRef = doc(db, CUSTOM_THEMES_COLLECTION, cleanId);
+
+  let alreadyExists = false;
+  try {
+    const existingSnap = await getDoc(docRef);
+    alreadyExists = existingSnap.exists();
+  } catch {
+    // Doc might not exist or might be an unpublished doc owned by someone else;
+    // proceed to create attempt below.
+    alreadyExists = false;
+  }
+
+  if (alreadyExists) {
+    if (options?.skipIfExists) {
+      markThemeSyncedToCloud(cleanId);
+      return {
+        ...theme,
+        id: cleanId,
+        isCustom: true,
+        isPublished: true,
+      };
+    }
+
+    try {
+      await updateDoc(docRef, updatableFields);
+      const updatedTheme: ThemeConfig = {
+        ...theme,
+        id: cleanId,
+        isCustom: true,
+        isPublished: true,
+        creatorUid: user.uid,
+        creatorName: payload.creatorName,
+      };
+      saveCustomTheme(updatedTheme);
+      markThemeSyncedToCloud(cleanId);
+      return updatedTheme;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  }
 
   try {
-    await setDoc(doc(db, CUSTOM_THEMES_COLLECTION, cleanId), payload);
+    await setDoc(docRef, payload);
     const savedTheme: ThemeConfig = {
       ...theme,
       id: cleanId,
@@ -211,31 +271,46 @@ export function subscribePublishedCustomThemes(
 }
 
 export async function syncLocalThemesToFirestore(user: User): Promise<number> {
-  const localThemes = getCustomThemes();
-  if (localThemes.length === 0) return 0;
-
-  let existingIds = new Set<string>();
-  try {
-    const q = query(
-      collection(db, CUSTOM_THEMES_COLLECTION),
-      where('isPublished', '==', true)
-    );
-    const snap = await getDocs(q);
-    existingIds = new Set(snap.docs.map((d) => d.id));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, CUSTOM_THEMES_COLLECTION);
+  if (inFlightSyncPromise && inFlightSyncUid === user.uid) {
+    return inFlightSyncPromise;
   }
 
-  let uploadedCount = 0;
-  for (const localTheme of localThemes) {
-    const cleanId = normalizeThemeId(localTheme.id);
-    if (!existingIds.has(cleanId)) {
-      await saveCustomThemeToFirestore(localTheme, user);
-      uploadedCount += 1;
-    } else {
-      markThemeSyncedToCloud(cleanId);
+  inFlightSyncUid = user.uid;
+  inFlightSyncPromise = (async () => {
+    const localThemes = getCustomThemes();
+    if (localThemes.length === 0) return 0;
+
+    let existingIds = new Set<string>();
+    try {
+      const q = query(
+        collection(db, CUSTOM_THEMES_COLLECTION),
+        where('isPublished', '==', true)
+      );
+      const snap = await getDocs(q);
+      existingIds = new Set(snap.docs.map((d) => d.id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, CUSTOM_THEMES_COLLECTION);
     }
-  }
 
-  return uploadedCount;
+    let uploadedCount = 0;
+    for (const localTheme of localThemes) {
+      const cleanId = normalizeThemeId(localTheme.id);
+      if (!existingIds.has(cleanId)) {
+        await saveCustomThemeToFirestore(localTheme, user, { skipIfExists: true });
+        existingIds.add(cleanId);
+        uploadedCount += 1;
+      } else {
+        markThemeSyncedToCloud(cleanId);
+      }
+    }
+
+    return uploadedCount;
+  })();
+
+  try {
+    return await inFlightSyncPromise;
+  } finally {
+    inFlightSyncPromise = null;
+    inFlightSyncUid = null;
+  }
 }

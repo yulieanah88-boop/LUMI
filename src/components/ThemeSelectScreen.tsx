@@ -83,8 +83,18 @@ export const ThemeSelectScreen: React.FC<ThemeSelectScreenProps> = ({
     sound.playClick();
     setIsSyncing(true);
     setSyncNotice('');
+    let user: User;
     try {
-      const user = await signInWithGooglePopup();
+      user = await signInWithGooglePopup();
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setSyncNotice('Gagal masuk dengan Google: ' + (err?.message || 'Silakan coba lagi.'));
+      }
+      setIsSyncing(false);
+      return;
+    }
+
+    try {
       const uploaded = await syncLocalThemesToFirestore(user);
       setLocalRefreshTick((t) => t + 1);
       sound.playCorrect();
@@ -94,9 +104,7 @@ export const ThemeSelectScreen: React.FC<ThemeSelectScreenProps> = ({
           : 'Akun Google terhubung! Semua tema kustom tersinkronisasi.'
       );
     } catch (err: any) {
-      if (err?.code !== 'auth/popup-closed-by-user') {
-        setSyncNotice('Gagal masuk dengan Google: ' + (err?.message || 'Silakan coba lagi.'));
-      }
+      setSyncNotice('Akun Google berhasil masuk, namun sinkronisasi tema terkendala: ' + (err?.message || 'Coba klik sinkronkan lagi.'));
     } finally {
       setIsSyncing(false);
     }
